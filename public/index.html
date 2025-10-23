@@ -375,7 +375,7 @@
                 requestId: Date.now().toString()
             }));
             
-            // Pre-create peer connection for this camera
+            // Pre-create peer connection for this camera using cameraId as key
             if (!peerConnections.has(cameraId)) {
                 createPeerConnection(cameraId);
             }
@@ -526,17 +526,30 @@
             try {
                 log(`Received offer from camera ${message.sender}`);
                 
+                // Find the cameraId for this sender
+                let cameraId = null;
+                availableCameras.forEach((clientId, id) => {
+                    if (clientId === message.sender) {
+                        cameraId = id;
+                    }
+                });
+                
+                if (!cameraId) {
+                    log(`Could not find camera ID for sender ${message.sender}`);
+                    return;
+                }
+                
                 // Get or create peer connection for this camera
                 let peerConnection;
-                if (!peerConnections.has(message.sender)) {
-                    peerConnection = createPeerConnection(message.sender);
+                if (!peerConnections.has(cameraId)) {
+                    peerConnection = createPeerConnection(cameraId);
                 } else {
-                    peerConnection = peerConnections.get(message.sender);
+                    peerConnection = peerConnections.get(cameraId);
                 }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
                 
-                log(`Creating answer for camera ${message.sender}`);
+                log(`Creating answer for camera ${cameraId}`);
                 const answer = await peerConnection.createAnswer({
                     offerToReceiveVideo: true,
                     offerToReceiveAudio: false
@@ -559,20 +572,39 @@
         async function handleAnswer(message) {
             try {
                 log(`Received answer from camera ${message.sender}`);
-                // This shouldn't happen in our architecture - only viewers receive answers
-                log('Unexpected answer received from camera');
+                const peerConnection = peerConnections.get(message.sender);
+                if (!peerConnection) {
+                    log(`No peer connection found for camera ${message.sender}`);
+                    return;
+                }
+                
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
                 log(`Error handling answer from camera ${message.sender}: ${error}`);
             }
         }
-        
+
         // Handle ICE candidate from camera
         async function handleIceCandidate(message) {
             try {
                 log(`Received ICE candidate from camera ${message.sender}`);
-                const peerConnection = peerConnections.get(message.sender);
+                
+                // Find the cameraId for this sender
+                let cameraId = null;
+                availableCameras.forEach((clientId, id) => {
+                    if (clientId === message.sender) {
+                        cameraId = id;
+                    }
+                });
+                
+                if (!cameraId) {
+                    log(`Could not find camera ID for sender ${message.sender}`);
+                    return;
+                }
+                
+                const peerConnection = peerConnections.get(cameraId);
                 if (!peerConnection) {
-                    log(`No peer connection found for camera ${message.sender}`);
+                    log(`No peer connection found for camera ${cameraId}`);
                     return;
                 }
                 

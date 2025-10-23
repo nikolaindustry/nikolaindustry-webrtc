@@ -239,6 +239,10 @@
                         console.log('Camera joined room:', message); // Debug log
                         break;
                         
+                    case 'clientJoined':
+                        log(`Client ${message.clientId} joined the room (${message.deviceType})`);
+                        break;
+                        
                     case 'viewerRequest':
                         log(`Viewer ${message.viewerId} requested stream`);
                         handleViewerRequest(message);
@@ -403,8 +407,21 @@
                     target: viewerId,
                     sdp: offer
                 }));
+                
+                // Process any queued ICE candidates
+                if (peerConnection.pendingIceCandidates) {
+                    log(`Processing ${peerConnection.pendingIceCandidates.length} queued ICE candidates for viewer ${viewerId}`);
+                    for (const candidate of peerConnection.pendingIceCandidates) {
+                        try {
+                            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        } catch (error) {
+                            log(`Error adding queued ICE candidate: ${error}`);
+                        }
+                    }
+                    delete peerConnection.pendingIceCandidates;
+                }
             } catch (error) {
-                log(`Error creating offer: ${error}`);
+                log(`Error creating offer for viewer ${viewerId}: ${error}`);
             }
         }
         
@@ -443,16 +460,16 @@
         // Handle answer from viewer
         async function handleAnswer(message) {
             try {
-                log(`Received answer from viewer ${message.viewerId}`);
-                const peerConnection = peerConnections.get(message.viewerId);
+                log(`Received answer from viewer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
                 if (!peerConnection) {
-                    log(`No peer connection found for viewer ${message.viewerId}`);
+                    log(`No peer connection found for viewer ${message.sender}`);
                     return;
                 }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
-                log(`Error handling answer: ${error}`);
+                log(`Error handling answer from viewer ${message.sender}: ${error}`);
             }
         }
 
@@ -466,9 +483,20 @@
                     return;
                 }
                 
+                // Check if remote description is set before adding ICE candidate
+                if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
+                    log(`Remote description not set yet for viewer ${message.sender}, queuing ICE candidate`);
+                    // Queue the ICE candidate to be added later
+                    if (!peerConnection.pendingIceCandidates) {
+                        peerConnection.pendingIceCandidates = [];
+                    }
+                    peerConnection.pendingIceCandidates.push(message.candidate);
+                    return;
+                }
+                
                 await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
             } catch (error) {
-                log(`Error handling ICE candidate: ${error}`);
+                log(`Error handling ICE candidate from viewer ${message.sender}: ${error}`);
             }
         }
     </script>
