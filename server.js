@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
 
 // Viewer interface endpoint
 app.get('/viewer', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
 });
 
 // Camera simulator endpoint
