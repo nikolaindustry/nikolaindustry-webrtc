@@ -1,5 +1,5 @@
 {
-  "name": "webrtc-signaling-server",
+  "name": "nikolaindustry-webrtc",
   "version": "1.0.0",
   "description": "A WebRTC signaling server for facilitating peer-to-peer video streaming",
   "main": "server.js",

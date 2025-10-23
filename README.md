@@ -1,4 +1,4 @@
-# WebRTC Signaling Server
+# nikolaindustry-webrtc
 
 A lightweight WebRTC signaling server built with Node.js and WebSocket to facilitate peer-to-peer video streaming connections. This server handles the exchange of SDP offers/answers and ICE candidates between peers but does not relay the actual video streams.
 
@@ -21,8 +21,8 @@ A lightweight WebRTC signaling server built with Node.js and WebSocket to facili
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
-   cd webrtc-signaling-server
+   git clone https://github.com/nikolaindustry/nikolaindustry-webrtc.git
+   cd nikolaindustry-webrtc
    ```
 
 2. Install dependencies:
