@@ -250,7 +250,7 @@
                         log(`Unknown message type: ${message.type}`);
                 }
             };
-            
+
             ws.onclose = () => {
                 log('Disconnected from signaling server');
                 statusDiv.textContent = 'Disconnected from signaling server';
