@@ -50,8 +50,9 @@ The server will start on port 8080 by default, or the PORT environment variable 
 
 ## API Endpoints
 
-- `GET /` - Serve the main viewer interface
-- `GET /camera-simulator.html` - Serve the camera simulator interface
+- `GET /` - Serve the main viewer interface (nikolaindustry-webrtc-viewer.html)
+- `GET /camera-simulator.html` - Serve the camera simulator interface (nikolaindustry-webrtc-camera-simulator.html)
+- `GET /viewer.html` - Serve the viewer interface (nikolaindustry-webrtc-index.html)
 - `GET /health` - Health check endpoint
 - WebSocket connection at `/` - Signaling communication
 

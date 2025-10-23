@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC CCTV Viewer | Enterprise Video Monitoring</title>
+    <title>nikolaindustry-webrtc Viewer | Enterprise Video Monitoring</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -416,7 +416,7 @@
             <div class="header-content">
                 <div class="logo">
                     <i class="fas fa-desktop"></i>
-                    <span>WebRTC CCTV Viewer</span>
+                    <span>nikolaindustry-webrtc Viewer</span>
                 </div>
                 <div class="nav-links">
                     <a href="/"><i class="fas fa-desktop"></i> Viewer</a>
@@ -1075,7 +1075,7 @@
                 log(`Creating answer for camera ${cameraId}`);
                 const answer = await peerConnection.createAnswer({
                     offerToReceiveVideo: true,
-                    offerToReceiveAudio: false
+                    offerToReceiveAudio: true
                 });
                 
                 await peerConnection.setLocalDescription(answer);

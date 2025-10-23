@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC CCTV Viewer | Enterprise Video Monitoring</title>
+    <title>ESP32 Camera Simulator | WebRTC CCTV System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -262,13 +262,6 @@
             color: var(--warning);
         }
 
-        .video-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-        }
-
         .video-container {
             position: relative;
             background-color: var(--gray-900);
@@ -299,31 +292,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-        }
-
-        .camera-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1rem;
-        }
-
-        .camera-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
-            background-color: var(--gray-100);
-            border-radius: var(--border-radius);
-            transition: var(--transition);
-        }
-
-        .camera-item:hover {
-            background-color: var(--gray-200);
-        }
-
-        .camera-id {
-            font-weight: 500;
-            color: var(--gray-800);
         }
 
         .stats-grid {
@@ -403,10 +371,6 @@
             .btn-group {
                 flex-direction: column;
             }
-            
-            .video-grid {
-                grid-template-columns: 1fr;
-            }
         }
     </style>
 </head>
@@ -415,8 +379,8 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-                    <i class="fas fa-desktop"></i>
-                    <span>WebRTC CCTV Viewer</span>
+                    <i class="fas fa-camera"></i>
+                    <span>nikolaindustry-webrtc Camera Simulator</span>
                 </div>
                 <div class="nav-links">
                     <a href="/"><i class="fas fa-desktop"></i> Viewer</a>
@@ -430,33 +394,12 @@
         <div class="card">
             <div class="card-header">
                 <i class="fas fa-info-circle"></i>
-                <h2 class="card-title">System Overview</h2>
+                <h1 class="card-title"><i class="fas fa-camera"></i> nikolaindustry-webrtc Camera Simulator</h1>
             </div>
-            <p>Connect to view live footage from ESP32 cameras. Join a room to see available cameras, then request to view specific camera feeds by their ID.</p>
+            <p>This simulator emulates a camera device that connects to the nikolaindustry-webrtc signaling server. It registers with a unique camera ID and waits for viewer requests to start streaming video.</p>
         </div>
 
         <div class="controls-grid">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-server"></i>
-                    <h2 class="card-title">Server Connection</h2>
-                </div>
-                <div class="control-group">
-                    <div class="btn-group">
-                        <button id="connectBtn" class="btn btn-success">
-                            <i class="fas fa-plug"></i> Connect to Server
-                        </button>
-                        <button id="disconnectBtn" class="btn btn-danger" disabled>
-                            <i class="fas fa-power-off"></i> Disconnect
-                        </button>
-                    </div>
-                    <div style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <span>Server Status:</span>
-                        <span id="serverStatus" class="status-indicator status-disconnected">Disconnected</span>
-                    </div>
-                </div>
-            </div>
-
             <div class="card">
                 <div class="card-header">
                     <i class="fas fa-door-open"></i>
@@ -468,8 +411,8 @@
                         <input type="text" id="roomNameInput" placeholder="Enter room name" value="cctv">
                     </div>
                     <div class="btn-group">
-                        <button id="createRoomBtn" class="btn btn-primary" disabled>
-                            <i class="fas fa-sign-in-alt"></i> Create/Join Room
+                        <button id="joinRoomBtn" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt"></i> Join Room
                         </button>
                         <button id="leaveRoomBtn" class="btn btn-secondary" disabled>
                             <i class="fas fa-sign-out-alt"></i> Leave Room
@@ -481,51 +424,50 @@
                     </div>
                 </div>
             </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-cog"></i>
+                    <h2 class="card-title">Camera Configuration</h2>
+                </div>
+                <div class="control-group">
+                    <div class="form-group">
+                        <label for="cameraIdInput">Camera ID</label>
+                        <input type="text" id="cameraIdInput" placeholder="Enter Camera ID" value="Nikolaindustry-WEBCAM-001">
+                    </div>
+                    <div class="btn-group">
+                        <button id="connectBtn" class="btn btn-success">
+                            <i class="fas fa-plug"></i> Connect Camera
+                        </button>
+                        <button id="disconnectBtn" class="btn btn-danger" disabled>
+                            <i class="fas fa-power-off"></i> Disconnect
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="card">
             <div class="card-header">
                 <i class="fas fa-video"></i>
-                <h2 class="card-title">Camera Control</h2>
+                <h2 class="card-title">Camera Preview</h2>
             </div>
-            <div class="control-group">
-                <div class="form-group">
-                    <label for="cameraIdInput">Camera ID</label>
-                    <input type="text" id="cameraIdInput" placeholder="Enter Camera ID to view">
-                </div>
-                <div class="btn-group">
-                    <button id="viewBtn" class="btn btn-primary" disabled>
-                        <i class="fas fa-eye"></i> View Camera
-                    </button>
-                    <button id="refreshBtn" class="btn btn-secondary" disabled>
-                        <i class="fas fa-sync-alt"></i> Refresh Camera List
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-list"></i>
-                <h2 class="card-title">Available Cameras</h2>
-            </div>
-            <div id="camerasList">
-                <p>No cameras available. Connect cameras to the network.</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-th-large"></i>
-                <h2 class="card-title">Active Video Streams</h2>
-            </div>
-            <div class="video-grid" id="videoContainer">
-                <div class="video-placeholder">
+            <div class="video-container">
+                <video id="localVideo" autoplay muted></video>
+                <div id="videoPlaceholder" class="video-placeholder">
                     <div>
                         <i class="fas fa-video-slash"></i>
-                        <p>Active video streams will appear here</p>
+                        <p>Camera feed will appear here after connecting</p>
                     </div>
                 </div>
+            </div>
+            <div class="btn-group" style="margin-top: 1.5rem;">
+                <button id="startStreamBtn" class="btn btn-primary" disabled>
+                    <i class="fas fa-play"></i> Start Streaming
+                </button>
+                <button id="stopStreamBtn" class="btn btn-danger" disabled>
+                    <i class="fas fa-stop"></i> Stop Streaming
+                </button>
             </div>
         </div>
 
@@ -537,12 +479,12 @@
                 </div>
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value" id="activeStreamsCount">0</div>
-                        <div class="stat-label">Active Streams</div>
+                        <div class="stat-value" id="viewerCount">0</div>
+                        <div class="stat-label">Connected Viewers</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="availableCamerasCount">0</div>
-                        <div class="stat-label">Available Cameras</div>
+                        <div class="stat-value" id="streamingStatusValue">Off</div>
+                        <div class="stat-label">Streaming Status</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-value" id="connectionStatusValue">Disconnected</div>
@@ -559,7 +501,7 @@
                 <div class="log-container" id="log">
                     <div class="log-entry">
                         <span class="log-timestamp">[--:--:--]</span>
-                        <span class="log-message">System initialized. Ready to connect to server.</span>
+                        <span class="log-message">System initialized. Ready to connect camera.</span>
                     </div>
                 </div>
             </div>
@@ -579,28 +521,29 @@
         // DOM elements
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
-        const viewBtn = document.getElementById('viewBtn');
-        const refreshBtn = document.getElementById('refreshBtn');
+        const startStreamBtn = document.getElementById('startStreamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
         const cameraIdInput = document.getElementById('cameraIdInput');
         const roomNameInput = document.getElementById('roomNameInput');
-        const createRoomBtn = document.getElementById('createRoomBtn');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
         const leaveRoomBtn = document.getElementById('leaveRoomBtn');
         const currentRoomSpan = document.getElementById('currentRoom');
-        const serverStatusSpan = document.getElementById('serverStatus');
-        const camerasList = document.getElementById('camerasList');
-        const videoContainer = document.getElementById('videoContainer');
-        const logDiv = document.getElementById('log');
-        const activeStreamsCount = document.getElementById('activeStreamsCount');
-        const availableCamerasCount = document.getElementById('availableCamerasCount');
+        const localVideo = document.getElementById('localVideo');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const viewerCountSpan = document.getElementById('viewerCount');
+        const streamingStatusValue = document.getElementById('streamingStatusValue');
         const connectionStatusValue = document.getElementById('connectionStatusValue');
+        const logDiv = document.getElementById('log');
         
         // Variables
         let ws;
         let clientId;
-        let currentRoom = null;
-        let availableCameras = new Map();
-        let activeStreams = new Map();
+        let cameraId;
+        let localStream;
         let peerConnections = new Map();
+        let viewerCount = 0;
+        let isStreaming = false;
+        let currentRoom = null;
         
         // Configuration
         const config = {
@@ -632,30 +575,52 @@
                 currentRoomSpan.className = 'status-indicator status-disconnected';
             }
             
-            // Update server status
+            // Update streaming status
+            if (isStreaming) {
+                streamingStatusValue.textContent = 'Active';
+                streamingStatusValue.style.color = 'var(--success)';
+            } else {
+                streamingStatusValue.textContent = 'Off';
+                streamingStatusValue.style.color = 'var(--danger)';
+            }
+            
+            // Update connection status
             if (ws && ws.readyState === WebSocket.OPEN) {
-                serverStatusSpan.textContent = 'Connected';
-                serverStatusSpan.className = 'status-indicator status-connected';
                 connectionStatusValue.textContent = 'Connected';
                 connectionStatusValue.style.color = 'var(--success)';
             } else {
-                serverStatusSpan.textContent = 'Disconnected';
-                serverStatusSpan.className = 'status-indicator status-disconnected';
                 connectionStatusValue.textContent = 'Disconnected';
                 connectionStatusValue.style.color = 'var(--danger)';
             }
-            
-            // Update stats
-            activeStreamsCount.textContent = activeStreams.size;
-            availableCamerasCount.textContent = availableCameras.size;
         }
         
-        // Connect to signaling server
-        connectBtn.onclick = () => {
+        // Connect to signaling server as camera
+        connectBtn.onclick = async () => {
+            cameraId = cameraIdInput.value.trim();
+            if (!cameraId) {
+                log('Error: Please enter a camera ID');
+                return;
+            }
+            
+            try {
+                // Get local media stream
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: false 
+                });
+                localVideo.srcObject = localStream;
+                videoPlaceholder.style.display = 'none';
+                log('Local video stream acquired');
+            } catch (error) {
+                log(`Error accessing media devices: ${error}`);
+                alert('Could not access camera. Please ensure you have a camera connected and have granted permission.');
+                return;
+            }
+            
             const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
             const wsUrl = protocol + window.location.host;
             
-            log(`Connecting to signaling server at ${wsUrl}`);
+            log(`Connecting to signaling server at ${wsUrl} as camera ${cameraId}`);
             ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
@@ -663,7 +628,7 @@
                 updateStatusIndicators();
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
-                createRoomBtn.disabled = false;
+                joinRoomBtn.disabled = false;
             };
             
             ws.onmessage = (event) => {
@@ -680,9 +645,17 @@
                         currentRoom = message.room;
                         log(`Joined room: ${message.room}`);
                         updateStatusIndicators();
-                        viewBtn.disabled = false;
-                        refreshBtn.disabled = false;
+                        startStreamBtn.disabled = false;
                         leaveRoomBtn.disabled = false;
+                        break;
+                        
+                    case 'clientJoined':
+                        log(`Client ${message.clientId} joined the room (${message.deviceType})`);
+                        break;
+                        
+                    case 'viewerRequest':
+                        log(`Viewer ${message.viewerId} requested stream`);
+                        handleViewerRequest(message);
                         break;
                         
                     case 'offer':
@@ -697,64 +670,35 @@
                         handleIceCandidate(message);
                         break;
                         
-                    case 'clientJoined':
-                        log(`Client ${message.clientId} joined the room (${message.deviceType})`);
-                        break;
-                        
-                    case 'cameraAvailable':
-                        log(`Camera ${message.cameraId} is now available`);
-                        availableCameras.set(message.cameraId, message.clientId);
-                        updateCamerasList();
-                        updateStatusIndicators();
-                        break;
-                        
-                    case 'cameraUnavailable':
-                        log(`Camera ${message.cameraId} is no longer available`);
-                        availableCameras.delete(message.cameraId);
-                        updateCamerasList();
-                        updateStatusIndicators();
-                        break;
-                        
-                    case 'cameraNotFound':
-                        log(`Camera ${message.cameraId} not found`);
-                        alert(`Camera ${message.cameraId} is not currently available`);
-                        break;
-                        
                     default:
                         log(`Unknown message type: ${message.type}`);
                 }
             };
-            
+
             ws.onclose = () => {
                 log('Disconnected from signaling server');
                 updateStatusIndicators();
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
-                viewBtn.disabled = true;
-                refreshBtn.disabled = true;
-                createRoomBtn.disabled = true;
+                startStreamBtn.disabled = true;
+                stopStreamBtn.disabled = true;
+                joinRoomBtn.disabled = true;
                 leaveRoomBtn.disabled = true;
                 currentRoom = null;
-                
-                // Clear all active streams
-                activeStreams.forEach((stream, cameraId) => {
-                    stream.getTracks().forEach(track => track.stop());
-                });
-                activeStreams.clear();
                 
                 // Close all peer connections
                 peerConnections.forEach(pc => pc.close());
                 peerConnections.clear();
+                viewerCount = 0;
+                viewerCountSpan.textContent = viewerCount;
                 
-                // Clear UI
-                videoContainer.innerHTML = `
-                    <div class="video-placeholder">
-                        <div>
-                            <i class="fas fa-video-slash"></i>
-                            <p>Active video streams will appear here</p>
-                        </div>
-                    </div>
-                `;
+                // Stop local stream
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                    localVideo.srcObject = null;
+                    videoPlaceholder.style.display = 'flex';
+                }
                 
                 updateStatusIndicators();
             };
@@ -771,8 +715,8 @@
             }
         };
         
-        // Create or join room
-        createRoomBtn.onclick = () => {
+        // Join room
+        joinRoomBtn.onclick = () => {
             const roomName = roomNameInput.value.trim();
             if (!roomName) {
                 log('Error: Please enter a room name');
@@ -789,16 +733,13 @@
                 log(`Leaving room ${currentRoom}`);
             }
             
-            // Clear current camera list
-            availableCameras.clear();
-            updateCamerasList();
-            
             // Join new room
             log(`Joining room: ${roomName}`);
             ws.send(JSON.stringify({
                 type: 'join',
-                room: roomName
-                // Viewers don't need to specify deviceType, it defaults to 'viewer'
+                room: roomName,
+                deviceType: 'camera',
+                cameraId: cameraId
             }));
         };
         
@@ -814,345 +755,202 @@
                 return;
             }
             
-            // Clear current camera list
-            availableCameras.clear();
-            updateCamerasList();
+            // Close all peer connections
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            viewerCount = 0;
+            viewerCountSpan.textContent = viewerCount;
             
             // Leave room by joining default room
             log(`Leaving room ${currentRoom}`);
             ws.send(JSON.stringify({
                 type: 'join',
-                room: 'default'
+                room: 'default',
+                deviceType: 'camera',
+                cameraId: cameraId
             }));
             
             currentRoom = null;
             updateStatusIndicators();
-            viewBtn.disabled = true;
-            refreshBtn.disabled = true;
+            startStreamBtn.disabled = true;
+            stopStreamBtn.disabled = true;
             leaveRoomBtn.disabled = true;
         };
         
-        // View a specific camera
-        viewBtn.onclick = () => {
-            const cameraId = cameraIdInput.value.trim();
-            if (!cameraId) {
-                log('Error: Please enter a camera ID');
-                return;
-            }
-            
-            if (!currentRoom) {
-                log('Error: Please join a room first');
-                return;
-            }
-            
-            if (availableCameras.has(cameraId)) {
-                requestCameraStream(cameraId);
-            } else {
-                // Request stream anyway - server will check if camera exists
-                requestCameraStream(cameraId);
-            }
+        // Start streaming (manual mode)
+        startStreamBtn.onclick = () => {
+            isStreaming = true;
+            updateStatusIndicators();
+            startStreamBtn.disabled = true;
+            stopStreamBtn.disabled = false;
+            log('Manual streaming started');
         };
         
-        // Refresh camera list
-        refreshBtn.onclick = () => {
-            if (!currentRoom) {
-                log('Error: Not in a room');
-                return;
-            }
+        // Stop streaming
+        stopStreamBtn.onclick = () => {
+            isStreaming = false;
+            updateStatusIndicators();
+            startStreamBtn.disabled = false;
+            stopStreamBtn.disabled = true;
             
-            // Request updated camera list from server
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    room: currentRoom
-                }));
-                log('Refreshing camera list...');
-            }
+            // Close all peer connections
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            viewerCount = 0;
+            viewerCountSpan.textContent = viewerCount;
+            
+            log('Streaming stopped');
         };
         
-        // Request camera stream
-        function requestCameraStream(cameraId) {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                log('Error: Not connected to server');
+        // Handle viewer request for stream
+        function handleViewerRequest(message) {
+            if (!isStreaming) {
+                log(`Viewer ${message.viewerId} requested stream, but streaming is not enabled`);
                 return;
             }
             
-            if (!currentRoom) {
-                log('Error: Not in a room');
-                return;
-            }
+            log(`Creating connection for viewer ${message.viewerId}`);
+            viewerCount++;
+            viewerCountSpan.textContent = viewerCount;
+            updateStatusIndicators();
             
-            log(`Requesting stream from camera ${cameraId} in room ${currentRoom}`);
-            ws.send(JSON.stringify({
-                type: 'requestStream',
-                cameraId: cameraId,
-                requestId: Date.now().toString()
-            }));
-            
-            // Pre-create peer connection for this camera using cameraId as key
-            if (!peerConnections.has(cameraId)) {
-                createPeerConnection(cameraId);
-            }
-        }
-        
-        // Update cameras list UI
-        function updateCamerasList() {
-            if (availableCameras.size === 0) {
-                camerasList.innerHTML = '<p>No cameras available. Connect cameras to the network.</p>';
-                return;
-            }
-            
-            let html = '<div class="camera-list">';
-            availableCameras.forEach((clientId, cameraId) => {
-                html += `
-                    <div class="camera-item">
-                        <span class="camera-id">Camera ${cameraId}</span>
-                        <button class="btn btn-primary btn-sm" onclick="requestCameraStream('${cameraId}')">
-                            <i class="fas fa-eye"></i> View
-                        </button>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            camerasList.innerHTML = html;
+            createPeerConnection(message.viewerId);
+            createOffer(message.viewerId);
         }
         
         // Create peer connection
-        function createPeerConnection(cameraId) {
+        function createPeerConnection(viewerId) {
             const peerConnection = new RTCPeerConnection(config);
+            
+            // Add media tracks (video only for CCTV)
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
             
             // Handle ICE candidates
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    log(`Sending ICE candidate to camera ${cameraId}`);
-                    // Find the client ID for this camera
-                    let targetClientId = null;
-                    availableCameras.forEach((clientId, id) => {
-                        if (id === cameraId) {
-                            targetClientId = clientId;
-                        }
-                    });
-                    
-                    if (targetClientId && ws && ws.readyState === WebSocket.OPEN) {
+                    log(`Sending ICE candidate to viewer ${viewerId}`);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({
                             type: 'iceCandidate',
-                            target: targetClientId,
+                            target: viewerId,
                             candidate: event.candidate
                         }));
                     }
                 }
             };
             
-            // Handle remote stream
-            peerConnection.ontrack = (event) => {
-                log(`Received video stream from camera ${cameraId}`);
-                const stream = event.streams[0];
-                activeStreams.set(cameraId, stream);
-                displayVideoStream(cameraId, stream);
-                updateStatusIndicators();
-            };
-            
             // Handle connection state changes
             peerConnection.onconnectionstatechange = () => {
-                log(`Connection state with camera ${cameraId}: ${peerConnection.connectionState}`);
+                log(`Connection state with viewer ${viewerId}: ${peerConnection.connectionState}`);
                 if (peerConnection.connectionState === 'disconnected' || 
                     peerConnection.connectionState === 'failed') {
-                    peerConnections.delete(cameraId);
-                    if (activeStreams.has(cameraId)) {
-                        activeStreams.delete(cameraId);
-                        updateStatusIndicators();
-                    }
+                    peerConnections.delete(viewerId);
+                    viewerCount = Math.max(0, viewerCount - 1);
+                    viewerCountSpan.textContent = viewerCount;
+                    updateStatusIndicators();
                 }
             };
             
-            peerConnection.onsignalingstatechange = () => {
-                log(`Signaling state with camera ${cameraId}: ${peerConnection.signalingState}`);
-            };
-            
-            peerConnection.oniceconnectionstatechange = () => {
-                log(`ICE connection state with camera ${cameraId}: ${peerConnection.iceConnectionState}`);
-            };
-            
-            // Store the peer connection
-            peerConnections.set(cameraId, peerConnection);
+            // Store peer connection
+            peerConnections.set(viewerId, peerConnection);
             return peerConnection;
         }
         
-        // Display video stream in UI
-        function displayVideoStream(cameraId, stream) {
-            // Remove placeholder if it exists
-            const placeholder = videoContainer.querySelector('.video-placeholder');
-            if (placeholder) {
-                videoContainer.innerHTML = '';
-            }
-            
-            // Check if video element already exists
-            let videoContainerEl = document.getElementById(`video-${cameraId}`);
-            if (!videoContainerEl) {
-                videoContainerEl = document.createElement('div');
-                videoContainerEl.id = `video-${cameraId}`;
-                videoContainerEl.className = 'video-container';
-                videoContainerEl.innerHTML = `
-                    <video id="video-${cameraId}-player" autoplay></video>
-                    <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.875rem;">
-                        Camera ${cameraId}
-                    </div>
-                    <button class="btn btn-danger" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px;" onclick="stopCameraStream('${cameraId}')">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-                videoContainer.appendChild(videoContainerEl);
-            }
-            
-            const videoElement = document.getElementById(`video-${cameraId}-player`);
-            videoElement.srcObject = stream;
-        }
-        
-        // Stop viewing a camera
-        function stopCameraStream(cameraId) {
-            // Close peer connection
-            if (peerConnections.has(cameraId)) {
-                peerConnections.get(cameraId).close();
-                peerConnections.delete(cameraId);
-            }
-            
-            // Stop stream tracks
-            if (activeStreams.has(cameraId)) {
-                activeStreams.get(cameraId).getTracks().forEach(track => track.stop());
-                activeStreams.delete(cameraId);
-            }
-            
-            // Remove video element
-            const videoContainerEl = document.getElementById(`video-${cameraId}`);
-            if (videoContainerEl) {
-                videoContainerEl.remove();
-            }
-            
-            // Show placeholder if no streams
-            if (activeStreams.size === 0) {
-                videoContainer.innerHTML = `
-                    <div class="video-placeholder">
-                        <div>
-                            <i class="fas fa-video-slash"></i>
-                            <p>Active video streams will appear here</p>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            log(`Stopped viewing camera ${cameraId}`);
-            updateStatusIndicators();
-        }
-        
-        // Handle offer from camera
-        async function handleOffer(message) {
+        // Create offer
+        async function createOffer(viewerId) {
             try {
-                log(`Received offer from camera ${message.sender}`);
+                const peerConnection = peerConnections.get(viewerId);
+                if (!peerConnection) return;
                 
-                // Find the cameraId for this sender
-                let cameraId = null;
-                availableCameras.forEach((clientId, id) => {
-                    if (clientId === message.sender) {
-                        cameraId = id;
-                    }
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveVideo: false, // Camera sends video, doesn't receive
+                    offerToReceiveAudio: false
                 });
                 
-                if (!cameraId) {
-                    log(`Could not find camera ID for sender ${message.sender}`);
-                    return;
-                }
+                await peerConnection.setLocalDescription(offer);
                 
-                // Get or create peer connection for this camera
+                log(`Sending offer to viewer ${viewerId}`);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'offer',
+                        target: viewerId,
+                        sdp: offer
+                    }));
+                }
+            } catch (error) {
+                log(`Error creating offer: ${error}`);
+            }
+        }
+        
+        // Handle offer from viewer (shouldn't happen in this architecture)
+        async function handleOffer(message) {
+            try {
+                log(`Received unexpected offer from viewer ${message.sender}`);
+                
                 let peerConnection;
-                if (!peerConnections.has(cameraId)) {
-                    peerConnection = createPeerConnection(cameraId);
+                if (peerConnections.has(message.sender)) {
+                    peerConnection = peerConnections.get(message.sender);
                 } else {
-                    peerConnection = peerConnections.get(cameraId);
+                    peerConnection = createPeerConnection(message.sender);
                 }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
                 
-                log(`Creating answer for camera ${cameraId}`);
                 const answer = await peerConnection.createAnswer({
-                    offerToReceiveVideo: true,
-                    offerToReceiveAudio: true
+                    offerToReceiveVideo: false,
+                    offerToReceiveAudio: false
                 });
                 
                 await peerConnection.setLocalDescription(answer);
                 
-                log(`Sending answer to camera ${message.sender}`);
-                ws.send(JSON.stringify({
-                    type: 'answer',
-                    target: message.sender,
-                    sdp: answer
-                }));
+                log(`Sending answer to viewer ${message.sender}`);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'answer',
+                        target: message.sender,
+                        sdp: answer
+                    }));
+                }
             } catch (error) {
-                log(`Error handling offer from camera ${message.sender}: ${error}`);
+                log(`Error handling offer: ${error}`);
             }
         }
         
-        // Handle answer from camera
+        // Handle answer from viewer
         async function handleAnswer(message) {
             try {
-                log(`Received answer from camera ${message.sender}`);
-                // Find the cameraId for this sender
-                let cameraId = null;
-                availableCameras.forEach((clientId, id) => {
-                    if (clientId === message.sender) {
-                        cameraId = id;
-                    }
-                });
-                
-                if (!cameraId) {
-                    log(`Could not find camera ID for sender ${message.sender}`);
-                    return;
-                }
-                
-                const peerConnection = peerConnections.get(cameraId);
+                log(`Received answer from viewer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
                 if (!peerConnection) {
-                    log(`No peer connection found for camera ${cameraId}`);
+                    log(`No peer connection found for viewer ${message.sender}`);
                     return;
                 }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
-                log(`Error handling answer from camera ${message.sender}: ${error}`);
+                log(`Error handling answer: ${error}`);
             }
         }
         
-        // Handle ICE candidate from camera
+        // Handle ICE candidate from viewer
         async function handleIceCandidate(message) {
             try {
-                log(`Received ICE candidate from camera ${message.sender}`);
-                
-                // Find the cameraId for this sender
-                let cameraId = null;
-                availableCameras.forEach((clientId, id) => {
-                    if (clientId === message.sender) {
-                        cameraId = id;
-                    }
-                });
-                
-                if (!cameraId) {
-                    log(`Could not find camera ID for sender ${message.sender}`);
-                    return;
-                }
-                
-                const peerConnection = peerConnections.get(cameraId);
+                log(`Received ICE candidate from viewer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
                 if (!peerConnection) {
-                    log(`No peer connection found for camera ${cameraId}`);
+                    log(`No peer connection found for viewer ${message.sender}`);
                     return;
                 }
                 
                 await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
             } catch (error) {
-                log(`Error handling ICE candidate from camera ${message.sender}: ${error}`);
+                log(`Error handling ICE candidate: ${error}`);
             }
         }
-        
-        // Make functions available globally for inline event handlers
-        window.requestCameraStream = requestCameraStream;
-        window.stopCameraStream = stopCameraStream;
         
         // Initialize
         updateStatusIndicators();

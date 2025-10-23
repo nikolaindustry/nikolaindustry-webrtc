@@ -17,12 +17,17 @@ app.get('/health', (req, res) => {
 
 // Main endpoint
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'nikolaindustry-webrtc-viewer.html'));
 });
 
 // Camera simulator endpoint
 app.get('/camera-simulator.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'camera-simulator.html'));
+  res.sendFile(path.join(__dirname, 'public', 'nikolaindustry-webrtc-camera-simulator.html'));
+});
+
+// Viewer endpoint
+app.get('/viewer.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'nikolaindustry-webrtc-index.html'));
 });
 
 // Create WebSocket server
