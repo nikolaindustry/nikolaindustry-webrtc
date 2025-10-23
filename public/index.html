@@ -229,6 +229,7 @@
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 log(`Received: ${message.type}`);
+                console.log('Received message:', message); // Debug log
                 
                 switch (message.type) {
                     case 'welcome':
@@ -258,12 +259,14 @@
                         
                     case 'cameraAvailable':
                         log(`Camera ${message.cameraId} is now available`);
+                        console.log('Camera available:', message); // Debug log
                         availableCameras.set(message.cameraId, message.clientId);
                         updateCamerasList();
                         break;
                         
                     case 'cameraUnavailable':
                         log(`Camera ${message.cameraId} is no longer available`);
+                        console.log('Camera unavailable:', message); // Debug log
                         availableCameras.delete(message.cameraId);
                         updateCamerasList();
                         break;

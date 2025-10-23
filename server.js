@@ -62,11 +62,13 @@ wss.on('connection', (ws, req) => {
     
     // Remove camera from available cameras if it was a camera
     if (ws.deviceType === 'camera' && ws.cameraId) {
+      console.log(`Removing camera ${ws.cameraId} from available cameras`);
       // Remove from global available cameras tracking
       if (availableCameras.has(ws.room)) {
         const roomCameras = availableCameras.get(ws.room);
         if (roomCameras.has(ws.cameraId)) {
           roomCameras.delete(ws.cameraId);
+          console.log(`Camera ${ws.cameraId} removed from room ${ws.room}`);
         }
       }
       
@@ -155,9 +157,12 @@ function handleSignalingMessage(sender, message) {
         sender.cameraId = message.cameraId;
       }
       
+      console.log(`Client ${sender.clientId} joining room ${room} as ${sender.deviceType || 'viewer'} with cameraId ${sender.cameraId}`);
+      
       // Initialize available cameras tracking for this room if needed
       if (!availableCameras.has(room)) {
         availableCameras.set(room, new Map());
+        console.log(`Initialized camera tracking for room ${room}`);
       }
       
       // Notify client of room join success
@@ -178,6 +183,7 @@ function handleSignalingMessage(sender, message) {
       if (sender.deviceType === 'camera' && sender.cameraId) {
         // Add to available cameras tracking
         availableCameras.get(room).set(sender.cameraId, sender.clientId);
+        console.log(`Registered camera ${sender.cameraId} in room ${room}`);
         
         // Notify all viewers in the room about the available camera
         broadcastToRoom(room, {
@@ -189,19 +195,28 @@ function handleSignalingMessage(sender, message) {
       
       // If this is a viewer, send them the list of currently available cameras
       if (!sender.deviceType || sender.deviceType === 'viewer') {
+        console.log(`New viewer ${sender.clientId} joining room ${room}`);
         // Send list of currently available cameras
         const roomCameras = availableCameras.get(room);
         if (roomCameras) {
+          console.log(`Found ${roomCameras.size} cameras in room ${room}`);
           roomCameras.forEach((cameraClientId, cameraId) => {
             // Verify the camera client is still connected
             if (clients.has(cameraClientId)) {
+              console.log(`Sending camera ${cameraId} to viewer ${sender.clientId}`);
               sender.send(JSON.stringify({
                 type: 'cameraAvailable',
                 cameraId: cameraId,
                 clientId: cameraClientId
               }));
+            } else {
+              // Camera is no longer connected, remove from available cameras
+              console.log(`Camera ${cameraId} no longer connected, removing from available list`);
+              roomCameras.delete(cameraId);
             }
           });
+        } else {
+          console.log(`No cameras found in room ${room}`);
         }
       }
       break;
@@ -213,21 +228,35 @@ function handleSignalingMessage(sender, message) {
         return;
       }
       
+      console.log(`Viewer ${sender.clientId} requesting stream from camera ${message.cameraId} in room ${sender.room}`);
+      
       // Find the camera with the requested ID
       let targetCamera = null;
       const roomCameras = availableCameras.get(sender.room);
-      if (roomCameras && roomCameras.has(message.cameraId)) {
-        const cameraClientId = roomCameras.get(message.cameraId);
-        // Verify the camera client is still connected
-        if (clients.has(cameraClientId)) {
-          targetCamera = cameraClientId;
+      if (roomCameras) {
+        console.log(`Found ${roomCameras.size} cameras in room ${sender.room}`);
+        if (roomCameras.has(message.cameraId)) {
+          const cameraClientId = roomCameras.get(message.cameraId);
+          console.log(`Camera ${message.cameraId} found with client ID ${cameraClientId}`);
+          // Verify the camera client is still connected
+          if (clients.has(cameraClientId)) {
+            targetCamera = cameraClientId;
+            console.log(`Camera ${message.cameraId} is connected`);
+          } else {
+            // Camera is no longer connected, remove from available cameras
+            console.log(`Camera ${message.cameraId} is no longer connected, removing from available list`);
+            roomCameras.delete(message.cameraId);
+          }
         } else {
-          // Camera is no longer connected, remove from available cameras
-          roomCameras.delete(message.cameraId);
+          console.log(`Camera ${message.cameraId} not found in available cameras list`);
+          console.log(`Available cameras:`, Array.from(roomCameras.keys()));
         }
+      } else {
+        console.log(`No cameras found in room ${sender.room}`);
       }
       
       if (targetCamera) {
+        console.log(`Notifying camera ${targetCamera} of viewer request`);
         // Notify the camera that a viewer wants to connect
         sendToClient(targetCamera, {
           type: 'viewerRequest',
@@ -235,6 +264,7 @@ function handleSignalingMessage(sender, message) {
           requestId: message.requestId || Date.now().toString()
         });
       } else {
+        console.log(`Camera ${message.cameraId} not found, sending cameraNotFound to viewer`);
         // Notify viewer that camera is not available
         sender.send(JSON.stringify({
           type: 'cameraNotFound',

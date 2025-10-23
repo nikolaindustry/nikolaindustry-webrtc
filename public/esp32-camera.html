@@ -218,12 +218,14 @@
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 log(`Received: ${message.type}`);
+                console.log('Camera received message:', message); // Debug log
                 
                 switch (message.type) {
                     case 'welcome':
                         clientId = message.clientId;
                         log(`Assigned client ID: ${clientId}`);
                         // Join the CCTV room as a camera immediately after getting client ID
+                        log(`Sending join message for camera ${cameraId}`);
                         ws.send(JSON.stringify({
                             type: 'join',
                             room: 'cctv',
@@ -234,6 +236,7 @@
                         
                     case 'joined':
                         log(`Joined room: ${message.room}`);
+                        console.log('Camera joined room:', message); // Debug log
                         break;
                         
                     case 'viewerRequest':
