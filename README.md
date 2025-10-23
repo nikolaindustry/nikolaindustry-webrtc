@@ -215,6 +215,8 @@ You'll need to open two browser windows or tabs to test the peer-to-peer connect
 1. Open `http://localhost:8080/camera-simulator.html` to simulate a camera
 2. Open `http://localhost:8080` to view the camera stream
 
+After deployment, the service will be accessible at `https://nikolaindustry-webrtc.onrender.com`
+
 ## How It Works
 
 1. Clients connect to the WebSocket server and are assigned unique IDs
