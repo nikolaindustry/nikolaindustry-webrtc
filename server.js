@@ -145,6 +145,18 @@ function handleSignalingMessage(sender, message) {
     case 'join':
       // Handle client joining a room
       const room = message.room || 'default';
+      
+      // If client is already in a room, remove them from camera tracking if they were a camera
+      if (sender.room && sender.deviceType === 'camera' && sender.cameraId) {
+        if (availableCameras.has(sender.room)) {
+          const oldRoomCameras = availableCameras.get(sender.room);
+          if (oldRoomCameras.has(sender.cameraId)) {
+            oldRoomCameras.delete(sender.cameraId);
+            console.log(`Removed camera ${sender.cameraId} from old room ${sender.room}`);
+          }
+        }
+      }
+      
       sender.room = room;
       
       // Check if client specified a device type

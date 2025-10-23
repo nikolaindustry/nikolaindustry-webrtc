@@ -239,6 +239,11 @@
                         
                     case 'joined':
                         log(`Joined room: ${message.room}`);
+                        // Add a small delay before enabling view button to ensure camera registration
+                        setTimeout(() => {
+                            viewBtn.disabled = false;
+                            refreshBtn.disabled = false;
+                        }, 1000);
                         break;
                         
                     case 'offer':
@@ -345,9 +350,17 @@
         
         // Refresh camera list
         refreshBtn.onclick = () => {
-            updateCamerasList();
+            // Request updated camera list from server
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                // Send a join message again to refresh camera list
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    room: 'cctv'
+                }));
+                log('Refreshing camera list...');
+            }
         };
-        
+
         // Request camera stream
         function requestCameraStream(cameraId) {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
