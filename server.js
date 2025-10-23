@@ -56,13 +56,16 @@ wss.on('connection', (ws, req) => {
   // Handle client disconnect
   ws.on('close', () => {
     console.log(`Client ${clientId} disconnected`);
-    clients.delete(clientId);
     
-    // Notify other clients that this client has left
-    broadcast({
-      type: 'clientDisconnected',
-      clientId: clientId
-    }, ws);
+    // Notify other clients in the same room that this client has left
+    if (ws.room) {
+      broadcastToRoom(ws.room, {
+        type: 'clientDisconnected',
+        clientId: clientId
+      }, ws);
+    }
+    
+    clients.delete(clientId);
   });
   
   // Handle errors
@@ -178,9 +181,47 @@ function generateClientId() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+// Get client count by room
+function getClientCountByRoom(room) {
+  let count = 0;
+  clients.forEach(client => {
+    if (client.room === room) {
+      count++;
+    }
+  });
+  return count;
+}
+
+// Get clients in room
+function getClientsInRoom(room) {
+  const roomClients = [];
+  clients.forEach((client, clientId) => {
+    if (client.room === room) {
+      roomClients.push({ clientId, client });
+    }
+  });
+  return roomClients;
+}
+
 // Start server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is listening on port ${PORT}`);
   console.log(`Access the application at: http://localhost:${PORT}`);
+  
+  // Log room statistics every 30 seconds
+  setInterval(() => {
+    const rooms = new Set();
+    clients.forEach(client => {
+      if (client.room) {
+        rooms.add(client.room);
+      }
+    });
+    
+    console.log(`Active rooms: ${rooms.size}`);
+    rooms.forEach(room => {
+      const clientCount = getClientCountByRoom(room);
+      console.log(`  Room '${room}': ${clientCount} clients`);
+    });
+  }, 30000);
 });

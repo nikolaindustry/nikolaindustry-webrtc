@@ -1,0 +1,21 @@
+{
+  "name": "webrtc-iot-client",
+  "version": "1.0.0",
+  "description": "WebRTC client for IoT devices",
+  "main": "camera_device.js",
+  "scripts": {
+    "start": "node camera_device.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0",
+    "wrtc": "^0.4.7"
+  },
+  "keywords": [
+    "webrtc",
+    "iot",
+    "camera",
+    "streaming"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

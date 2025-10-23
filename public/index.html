@@ -94,10 +94,10 @@
         // Variables
         let ws;
         let localStream;
-        let remoteStream;
-        let peerConnection;
+        let remoteStreams = new Map(); // Store multiple remote streams
+        let peerConnections = new Map(); // Store multiple peer connections
         let clientId;
-        let peerId; // Store the ID of the peer we want to connect to
+        let peerIds = new Set(); // Store multiple peer IDs
         
         // Configuration
         const config = {
@@ -160,8 +160,27 @@
                         
                     case 'clientJoined':
                         log(`Peer ${message.clientId} joined the room`);
-                        // Store the peer ID for later use
-                        peerId = message.clientId;
+                        // Add peer to our list
+                        peerIds.add(message.clientId);
+                        // Auto-initiate connection to new peer
+                        if (localStream) {
+                            createPeerConnection(message.clientId);
+                            createOffer(message.clientId);
+                        }
+                        break;
+                        
+                    case 'clientDisconnected':
+                        log(`Peer ${message.clientId} disconnected`);
+                        // Remove peer from our list
+                        peerIds.delete(message.clientId);
+                        // Clean up connection
+                        if (peerConnections.has(message.clientId)) {
+                            peerConnections.get(message.clientId).close();
+                            peerConnections.delete(message.clientId);
+                        }
+                        if (remoteStreams.has(message.clientId)) {
+                            remoteStreams.delete(message.clientId);
+                        }
                         break;
                         
                     default:
@@ -209,47 +228,58 @@
             }
         };
         
-        // Call peer
+        // Call all peers
         callBtn.onclick = () => {
-            if (!peerId) {
-                log('No peer available to call');
+            if (peerIds.size === 0) {
+                log('No peers available to call');
                 return;
             }
-            createPeerConnection();
-            createOffer();
+            
+            // Create connections to all peers
+            peerIds.forEach(peerId => {
+                if (!peerConnections.has(peerId)) {
+                    createPeerConnection(peerId);
+                    createOffer(peerId);
+                }
+            });
         };
         
-        // Hang up
+        // Hang up all connections
         hangupBtn.onclick = () => {
-            if (peerConnection) {
-                peerConnection.close();
-                peerConnection = null;
+            // Close all peer connections
+            peerConnections.forEach((pc, peerId) => {
+                pc.close();
+            });
+            
+            peerConnections.clear();
+            remoteStreams.clear();
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+                localVideo.srcObject = null;
             }
             
-            if (remoteStream) {
-                remoteStream.getTracks().forEach(track => track.stop());
-                remoteStream = null;
-            }
-            
-            remoteVideo.srcObject = null;
             callBtn.disabled = false;
             hangupBtn.disabled = true;
-            log('Call ended');
+            log('All calls ended');
         };
         
         // Create peer connection
-        function createPeerConnection() {
-            peerConnection = new RTCPeerConnection(config);
+        function createPeerConnection(peerId) {
+            const peerConnection = new RTCPeerConnection(config);
             
             // Add local stream tracks
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-            });
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
             
             // Handle ICE candidates
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    log('Sending ICE candidate');
+                    log(`Sending ICE candidate to peer ${peerId}`);
                     ws.send(JSON.stringify({
                         type: 'iceCandidate',
                         target: peerId,
@@ -260,86 +290,120 @@
             
             // Handle remote stream
             peerConnection.ontrack = (event) => {
-                log('Received remote stream');
-                remoteStream = event.streams[0];
-                remoteVideo.srcObject = remoteStream;
+                log(`Received remote stream from peer ${peerId}`);
+                if (!remoteStreams.has(peerId)) {
+                    remoteStreams.set(peerId, event.streams[0]);
+                    // In a real app, you would display this stream in a video element
+                }
+                remoteVideo.srcObject = event.streams[0];
             };
             
             // Handle connection state changes
             peerConnection.onconnectionstatechange = () => {
-                log(`Connection state: ${peerConnection.connectionState}`);
+                log(`Connection state with peer ${peerId}: ${peerConnection.connectionState}`);
             };
             
             peerConnection.onsignalingstatechange = () => {
-                log(`Signaling state: ${peerConnection.signalingState}`);
+                log(`Signaling state with peer ${peerId}: ${peerConnection.signalingState}`);
             };
             
             peerConnection.oniceconnectionstatechange = () => {
-                log(`ICE connection state: ${peerConnection.iceConnectionState}`);
+                log(`ICE connection state with peer ${peerId}: ${peerConnection.iceConnectionState}`);
             };
+            
+            // Store the peer connection
+            peerConnections.set(peerId, peerConnection);
+            return peerConnection;
         }
         
         // Create offer
-        async function createOffer() {
+        async function createOffer(peerId) {
             try {
-                log('Creating offer');
+                const peerConnection = peerConnections.get(peerId);
+                if (!peerConnection) {
+                    log(`No peer connection found for peer ${peerId}`);
+                    return;
+                }
+                
+                log(`Creating offer for peer ${peerId}`);
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
                 
-                log('Sending offer');
+                log(`Sending offer to peer ${peerId}`);
                 ws.send(JSON.stringify({
                     type: 'offer',
                     target: peerId,
                     sdp: offer
                 }));
             } catch (error) {
-                log(`Error creating offer: ${error}`);
+                log(`Error creating offer for peer ${peerId}: ${error}`);
             }
         }
         
         // Handle offer
         async function handleOffer(message) {
             try {
-                log('Received offer');
-                createPeerConnection();
+                log(`Received offer from peer ${message.sender}`);
                 
-                // Store the sender ID as our peer ID
-                peerId = message.sender;
+                // Add sender to our peer list if not already there
+                if (!peerIds.has(message.sender)) {
+                    peerIds.add(message.sender);
+                }
+                
+                // Create peer connection if it doesn't exist
+                let peerConnection;
+                if (peerConnections.has(message.sender)) {
+                    peerConnection = peerConnections.get(message.sender);
+                } else {
+                    peerConnection = createPeerConnection(message.sender);
+                }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
                 
-                log('Creating answer');
+                log(`Creating answer for peer ${message.sender}`);
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
                 
-                log('Sending answer');
+                log(`Sending answer to peer ${message.sender}`);
                 ws.send(JSON.stringify({
                     type: 'answer',
-                    target: peerId,
+                    target: message.sender,
                     sdp: answer
                 }));
             } catch (error) {
-                log(`Error handling offer: ${error}`);
+                log(`Error handling offer from peer ${message.sender}: ${error}`);
             }
         }
         
         // Handle answer
         async function handleAnswer(message) {
             try {
-                log('Received answer');
+                log(`Received answer from peer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
+                if (!peerConnection) {
+                    log(`No peer connection found for peer ${message.sender}`);
+                    return;
+                }
+                
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
-                log(`Error handling answer: ${error}`);
+                log(`Error handling answer from peer ${message.sender}: ${error}`);
             }
         }
         
         // Handle ICE candidate
         async function handleIceCandidate(message) {
             try {
-                log('Received ICE candidate');
+                log(`Received ICE candidate from peer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
+                if (!peerConnection) {
+                    log(`No peer connection found for peer ${message.sender}`);
+                    return;
+                }
+                
                 await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
             } catch (error) {
-                log(`Error handling ICE candidate: ${error}`);
+                log(`Error handling ICE candidate from peer ${message.sender}: ${error}`);
             }
         }
     </script>
