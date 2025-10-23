@@ -26,6 +26,9 @@ const wss = new WebSocket.Server({ server });
 // Store connected clients
 const clients = new Map();
 
+// Store available cameras by room
+const availableCameras = new Map();
+
 // Handle WebSocket connections
 wss.on('connection', (ws, req) => {
   console.log('New client connected');
@@ -57,12 +60,24 @@ wss.on('connection', (ws, req) => {
   ws.on('close', () => {
     console.log(`Client ${clientId} disconnected`);
     
-    // Notify other clients in the same room that this client has left
-    if (ws.room) {
-      broadcastToRoom(ws.room, {
-        type: 'clientDisconnected',
-        clientId: clientId
-      }, ws);
+    // Remove camera from available cameras if it was a camera
+    if (ws.deviceType === 'camera' && ws.cameraId) {
+      // Remove from global available cameras tracking
+      if (availableCameras.has(ws.room)) {
+        const roomCameras = availableCameras.get(ws.room);
+        if (roomCameras.has(ws.cameraId)) {
+          roomCameras.delete(ws.cameraId);
+        }
+      }
+      
+      // Notify other clients in the room that this camera is no longer available
+      if (ws.room) {
+        broadcastToRoom(ws.room, {
+          type: 'cameraUnavailable',
+          cameraId: ws.cameraId,
+          clientId: clientId
+        }, ws);
+      }
     }
     
     clients.delete(clientId);
@@ -140,6 +155,11 @@ function handleSignalingMessage(sender, message) {
         sender.cameraId = message.cameraId;
       }
       
+      // Initialize available cameras tracking for this room if needed
+      if (!availableCameras.has(room)) {
+        availableCameras.set(room, new Map());
+      }
+      
       // Notify client of room join success
       sender.send(JSON.stringify({
         type: 'joined',
@@ -154,8 +174,12 @@ function handleSignalingMessage(sender, message) {
         cameraId: sender.cameraId
       }, sender);
       
-      // If this is a camera, notify all viewers in the room about available cameras
+      // If this is a camera, add it to available cameras and notify all viewers
       if (sender.deviceType === 'camera' && sender.cameraId) {
+        // Add to available cameras tracking
+        availableCameras.get(room).set(sender.cameraId, sender.clientId);
+        
+        // Notify all viewers in the room about the available camera
         broadcastToRoom(room, {
           type: 'cameraAvailable',
           cameraId: sender.cameraId,
@@ -165,19 +189,20 @@ function handleSignalingMessage(sender, message) {
       
       // If this is a viewer, send them the list of currently available cameras
       if (!sender.deviceType || sender.deviceType === 'viewer') {
-        // Find all available cameras in this room and notify the new viewer
-        clients.forEach((client, clientId) => {
-          if (client !== sender && 
-              client.room === room && 
-              client.deviceType === 'camera' && 
-              client.cameraId) {
-            sender.send(JSON.stringify({
-              type: 'cameraAvailable',
-              cameraId: client.cameraId,
-              clientId: clientId
-            }));
-          }
-        });
+        // Send list of currently available cameras
+        const roomCameras = availableCameras.get(room);
+        if (roomCameras) {
+          roomCameras.forEach((cameraClientId, cameraId) => {
+            // Verify the camera client is still connected
+            if (clients.has(cameraClientId)) {
+              sender.send(JSON.stringify({
+                type: 'cameraAvailable',
+                cameraId: cameraId,
+                clientId: cameraClientId
+              }));
+            }
+          });
+        }
       }
       break;
       
@@ -190,13 +215,17 @@ function handleSignalingMessage(sender, message) {
       
       // Find the camera with the requested ID
       let targetCamera = null;
-      clients.forEach((client, clientId) => {
-        if (client.room === sender.room && 
-            client.deviceType === 'camera' && 
-            client.cameraId === message.cameraId) {
-          targetCamera = clientId;
+      const roomCameras = availableCameras.get(sender.room);
+      if (roomCameras && roomCameras.has(message.cameraId)) {
+        const cameraClientId = roomCameras.get(message.cameraId);
+        // Verify the camera client is still connected
+        if (clients.has(cameraClientId)) {
+          targetCamera = cameraClientId;
+        } else {
+          // Camera is no longer connected, remove from available cameras
+          roomCameras.delete(message.cameraId);
         }
-      });
+      }
       
       if (targetCamera) {
         // Notify the camera that a viewer wants to connect

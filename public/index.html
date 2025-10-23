@@ -262,6 +262,12 @@
                         updateCamerasList();
                         break;
                         
+                    case 'cameraUnavailable':
+                        log(`Camera ${message.cameraId} is no longer available`);
+                        availableCameras.delete(message.cameraId);
+                        updateCamerasList();
+                        break;
+                        
                     case 'cameraNotFound':
                         log(`Camera ${message.cameraId} not found`);
                         alert(`Camera ${message.cameraId} is not currently available`);

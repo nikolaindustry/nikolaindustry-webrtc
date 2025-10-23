@@ -223,6 +223,13 @@
                     case 'welcome':
                         clientId = message.clientId;
                         log(`Assigned client ID: ${clientId}`);
+                        // Join the CCTV room as a camera immediately after getting client ID
+                        ws.send(JSON.stringify({
+                            type: 'join',
+                            room: 'cctv',
+                            deviceType: 'camera',
+                            cameraId: cameraId
+                        }));
                         break;
                         
                     case 'joined':
@@ -277,17 +284,18 @@
                 log(`WebSocket error: ${error}`);
             };
             
+            // Remove the delayed join and move it to the welcome message handler above
             // Join the CCTV room as a camera after a short delay
-            setTimeout(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'join',
-                        room: 'cctv',
-                        deviceType: 'camera',
-                        cameraId: cameraId
-                    }));
-                }
-            }, 1000);
+            // setTimeout(() => {
+            //     if (ws && ws.readyState === WebSocket.OPEN) {
+            //         ws.send(JSON.stringify({
+            //             type: 'join',
+            //             room: 'cctv',
+            //             deviceType: 'camera',
+            //             cameraId: cameraId
+            //         }));
+            //     }
+            // }, 1000);
         };
         
         // Disconnect from server
