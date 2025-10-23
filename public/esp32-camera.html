@@ -439,14 +439,14 @@
                 log(`Error handling offer: ${error}`);
             }
         }
-        
+
         // Handle answer from viewer
         async function handleAnswer(message) {
             try {
-                log(`Received answer from viewer ${message.sender}`);
-                const peerConnection = peerConnections.get(message.sender);
+                log(`Received answer from viewer ${message.viewerId}`);
+                const peerConnection = peerConnections.get(message.viewerId);
                 if (!peerConnection) {
-                    log(`No peer connection found for viewer ${message.sender}`);
+                    log(`No peer connection found for viewer ${message.viewerId}`);
                     return;
                 }
                 
@@ -455,7 +455,7 @@
                 log(`Error handling answer: ${error}`);
             }
         }
-        
+
         // Handle ICE candidate from viewer
         async function handleIceCandidate(message) {
             try {
