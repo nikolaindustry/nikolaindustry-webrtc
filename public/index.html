@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Signaling Server Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .video-container {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        video {
+            width: 300px;
+            height: 200px;
+            border: 1px solid #ccc;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+        }
+        .log {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC Signaling Server Test</h1>
+    
+    <div id="status">Not connected</div>
+    
+    <div class="video-container">
+        <div>
+            <h3>Local Video</h3>
+            <video id="localVideo" autoplay muted></video>
+        </div>
+        <div>
+            <h3>Remote Video</h3>
+            <video id="remoteVideo" autoplay></video>
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="connectBtn">Connect to Server</button>
+        <button id="startBtn" disabled>Start Video</button>
+        <button id="callBtn" disabled>Call Peer</button>
+        <button id="hangupBtn" disabled>Hang Up</button>
+    </div>
+    
+    <h3>Signaling Log</h3>
+    <div id="log" class="log"></div>
+
+    <script>
+        // DOM elements
+        const connectBtn = document.getElementById('connectBtn');
+        const startBtn = document.getElementById('startBtn');
+        const callBtn = document.getElementById('callBtn');
+        const hangupBtn = document.getElementById('hangupBtn');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        const localVideo = document.getElementById('localVideo');
+        const remoteVideo = document.getElementById('remoteVideo');
+        
+        // Variables
+        let ws;
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+        let clientId;
+        let peerId; // Store the ID of the peer we want to connect to
+        
+        // Configuration
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        
+        // Log function
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Connect to signaling server
+        connectBtn.onclick = () => {
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const wsUrl = protocol + window.location.host;
+            
+            log(`Connecting to signaling server at ${wsUrl}`);
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('Connected to signaling server');
+                statusDiv.textContent = 'Connected to signaling server';
+                statusDiv.style.backgroundColor = '#d4edda';
+                connectBtn.disabled = true;
+                startBtn.disabled = false;
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                log(`Received: ${message.type}`);
+                
+                switch (message.type) {
+                    case 'welcome':
+                        clientId = message.clientId;
+                        log(`Assigned client ID: ${clientId}`);
+                        break;
+                        
+                    case 'joined':
+                        log(`Joined room: ${message.room}`);
+                        callBtn.disabled = false;
+                        break;
+                        
+                    case 'offer':
+                        handleOffer(message);
+                        break;
+                        
+                    case 'answer':
+                        handleAnswer(message);
+                        break;
+                        
+                    case 'iceCandidate':
+                        handleIceCandidate(message);
+                        break;
+                        
+                    case 'clientJoined':
+                        log(`Peer ${message.clientId} joined the room`);
+                        // Store the peer ID for later use
+                        peerId = message.clientId;
+                        break;
+                        
+                    default:
+                        log(`Unknown message type: ${message.type}`);
+                }
+            };
+            
+            ws.onclose = () => {
+                log('Disconnected from signaling server');
+                statusDiv.textContent = 'Disconnected from signaling server';
+                statusDiv.style.backgroundColor = '#f8d7da';
+                connectBtn.disabled = false;
+                startBtn.disabled = true;
+                callBtn.disabled = true;
+                hangupBtn.disabled = true;
+            };
+            
+            ws.onerror = (error) => {
+                log(`WebSocket error: ${error}`);
+            };
+        };
+        
+        // Start local video
+        startBtn.onclick = async () => {
+            try {
+                log('Requesting local video stream');
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+                
+                localVideo.srcObject = localStream;
+                log('Local video stream acquired');
+                
+                // Join default room
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    room: 'default'
+                }));
+                
+                startBtn.disabled = true;
+                hangupBtn.disabled = false;
+            } catch (error) {
+                log(`Error accessing media devices: ${error}`);
+            }
+        };
+        
+        // Call peer
+        callBtn.onclick = () => {
+            if (!peerId) {
+                log('No peer available to call');
+                return;
+            }
+            createPeerConnection();
+            createOffer();
+        };
+        
+        // Hang up
+        hangupBtn.onclick = () => {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(track => track.stop());
+                remoteStream = null;
+            }
+            
+            remoteVideo.srcObject = null;
+            callBtn.disabled = false;
+            hangupBtn.disabled = true;
+            log('Call ended');
+        };
+        
+        // Create peer connection
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(config);
+            
+            // Add local stream tracks
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log('Sending ICE candidate');
+                    ws.send(JSON.stringify({
+                        type: 'iceCandidate',
+                        target: peerId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            // Handle remote stream
+            peerConnection.ontrack = (event) => {
+                log('Received remote stream');
+                remoteStream = event.streams[0];
+                remoteVideo.srcObject = remoteStream;
+            };
+            
+            // Handle connection state changes
+            peerConnection.onconnectionstatechange = () => {
+                log(`Connection state: ${peerConnection.connectionState}`);
+            };
+            
+            peerConnection.onsignalingstatechange = () => {
+                log(`Signaling state: ${peerConnection.signalingState}`);
+            };
+            
+            peerConnection.oniceconnectionstatechange = () => {
+                log(`ICE connection state: ${peerConnection.iceConnectionState}`);
+            };
+        }
+        
+        // Create offer
+        async function createOffer() {
+            try {
+                log('Creating offer');
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                log('Sending offer');
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    target: peerId,
+                    sdp: offer
+                }));
+            } catch (error) {
+                log(`Error creating offer: ${error}`);
+            }
+        }
+        
+        // Handle offer
+        async function handleOffer(message) {
+            try {
+                log('Received offer');
+                createPeerConnection();
+                
+                // Store the sender ID as our peer ID
+                peerId = message.sender;
+                
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
+                
+                log('Creating answer');
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                log('Sending answer');
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    target: peerId,
+                    sdp: answer
+                }));
+            } catch (error) {
+                log(`Error handling offer: ${error}`);
+            }
+        }
+        
+        // Handle answer
+        async function handleAnswer(message) {
+            try {
+                log('Received answer');
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
+            } catch (error) {
+                log(`Error handling answer: ${error}`);
+            }
+        }
+        
+        // Handle ICE candidate
+        async function handleIceCandidate(message) {
+            try {
+                log('Received ICE candidate');
+                await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+            } catch (error) {
+                log(`Error handling ICE candidate: ${error}`);
+            }
+        }
+    </script>
+</body>
+</html>
