@@ -119,6 +119,18 @@
         .nav-links a:hover {
             background-color: #1976D2;
         }
+        .room-controls {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .room-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -139,6 +151,19 @@
         <p>3. Return to this page and connect as a viewer</p>
         <p>4. Request to view the camera by its ID</p>
         <p>5. View live footage from the simulated camera</p>
+    </div>
+    
+    <div class="room-controls">
+        <h3>Room Management</h3>
+        <div class="control-group">
+            <input type="text" id="roomNameInput" placeholder="Enter room name" value="cctv">
+            <button id="createRoomBtn">Create/Join Room</button>
+            <button id="leaveRoomBtn" disabled>Leave Room</button>
+        </div>
+        <div class="room-info">
+            <p>Current Room: <span id="currentRoom">Not in a room</span></p>
+            <p>Room Status: <span id="roomStatus">Disconnected</span></p>
+        </div>
     </div>
     
     <div id="status">Not connected</div>
@@ -184,10 +209,16 @@
         const logDiv = document.getElementById('log');
         const camerasList = document.getElementById('camerasList');
         const videoContainer = document.getElementById('videoContainer');
+        const roomNameInput = document.getElementById('roomNameInput');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        const currentRoomSpan = document.getElementById('currentRoom');
+        const roomStatusSpan = document.getElementById('roomStatus');
         
         // Variables
         let ws;
         let clientId;
+        let currentRoom = null;
         let availableCameras = new Map();
         let activeStreams = new Map();
         let peerConnections = new Map();
@@ -222,14 +253,12 @@
                 statusDiv.style.backgroundColor = '#d4edda';
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
-                viewBtn.disabled = false;
-                refreshBtn.disabled = false;
+                createRoomBtn.disabled = false;
             };
             
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 log(`Received: ${message.type}`);
-                console.log('Received message:', message); // Debug log
                 
                 switch (message.type) {
                     case 'welcome':
@@ -238,12 +267,14 @@
                         break;
                         
                     case 'joined':
+                        currentRoom = message.room;
+                        currentRoomSpan.textContent = currentRoom;
+                        roomStatusSpan.textContent = 'Joined';
+                        roomStatusSpan.style.color = 'green';
                         log(`Joined room: ${message.room}`);
-                        // Add a small delay before enabling view button to ensure camera registration
-                        setTimeout(() => {
-                            viewBtn.disabled = false;
-                            refreshBtn.disabled = false;
-                        }, 1000);
+                        viewBtn.disabled = false;
+                        refreshBtn.disabled = false;
+                        leaveRoomBtn.disabled = false;
                         break;
                         
                     case 'offer':
@@ -264,14 +295,12 @@
                         
                     case 'cameraAvailable':
                         log(`Camera ${message.cameraId} is now available`);
-                        console.log('Camera available:', message); // Debug log
                         availableCameras.set(message.cameraId, message.clientId);
                         updateCamerasList();
                         break;
                         
                     case 'cameraUnavailable':
                         log(`Camera ${message.cameraId} is no longer available`);
-                        console.log('Camera unavailable:', message); // Debug log
                         availableCameras.delete(message.cameraId);
                         updateCamerasList();
                         break;
@@ -285,7 +314,7 @@
                         log(`Unknown message type: ${message.type}`);
                 }
             };
-
+            
             ws.onclose = () => {
                 log('Disconnected from signaling server');
                 statusDiv.textContent = 'Disconnected from signaling server';
@@ -294,6 +323,12 @@
                 disconnectBtn.disabled = true;
                 viewBtn.disabled = true;
                 refreshBtn.disabled = true;
+                createRoomBtn.disabled = true;
+                leaveRoomBtn.disabled = true;
+                currentRoom = null;
+                currentRoomSpan.textContent = 'Not in a room';
+                roomStatusSpan.textContent = 'Disconnected';
+                roomStatusSpan.style.color = 'red';
                 
                 // Clear all active streams
                 activeStreams.forEach((stream, cameraId) => {
@@ -312,17 +347,6 @@
             ws.onerror = (error) => {
                 log(`WebSocket error: ${error}`);
             };
-            
-            // Join the CCTV room
-            setTimeout(() => {
-                if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'join',
-                        room: 'cctv'
-                        // Viewers don't need to specify deviceType, it defaults to 'viewer'
-                    }));
-                }
-            }, 1000);
         };
         
         // Disconnect from server
@@ -332,11 +356,79 @@
             }
         };
         
+        // Create or join room
+        createRoomBtn.onclick = () => {
+            const roomName = roomNameInput.value.trim();
+            if (!roomName) {
+                alert('Please enter a room name');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server');
+                return;
+            }
+            
+            // Leave current room if in one
+            if (currentRoom) {
+                log(`Leaving room ${currentRoom}`);
+            }
+            
+            // Clear current camera list
+            availableCameras.clear();
+            updateCamerasList();
+            
+            // Join new room
+            log(`Joining room: ${roomName}`);
+            ws.send(JSON.stringify({
+                type: 'join',
+                room: roomName
+                // Viewers don't need to specify deviceType, it defaults to 'viewer'
+            }));
+        };
+        
+        // Leave current room
+        leaveRoomBtn.onclick = () => {
+            if (!currentRoom) {
+                log('Not in a room');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server');
+                return;
+            }
+            
+            // Clear current camera list
+            availableCameras.clear();
+            updateCamerasList();
+            
+            // Leave room by joining default room
+            log(`Leaving room ${currentRoom}`);
+            ws.send(JSON.stringify({
+                type: 'join',
+                room: 'default'
+            }));
+            
+            currentRoom = null;
+            currentRoomSpan.textContent = 'Not in a room';
+            roomStatusSpan.textContent = 'Disconnected';
+            roomStatusSpan.style.color = 'red';
+            viewBtn.disabled = true;
+            refreshBtn.disabled = true;
+            leaveRoomBtn.disabled = true;
+        };
+        
         // View a specific camera
         viewBtn.onclick = () => {
             const cameraId = cameraIdInput.value.trim();
             if (!cameraId) {
                 alert('Please enter a camera ID');
+                return;
+            }
+            
+            if (!currentRoom) {
+                alert('Please join a room first');
                 return;
             }
             
@@ -350,17 +442,21 @@
         
         // Refresh camera list
         refreshBtn.onclick = () => {
+            if (!currentRoom) {
+                log('Not in a room');
+                return;
+            }
+            
             // Request updated camera list from server
             if (ws && ws.readyState === WebSocket.OPEN) {
-                // Send a join message again to refresh camera list
                 ws.send(JSON.stringify({
                     type: 'join',
-                    room: 'cctv'
+                    room: currentRoom
                 }));
                 log('Refreshing camera list...');
             }
         };
-
+        
         // Request camera stream
         function requestCameraStream(cameraId) {
             if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -368,7 +464,12 @@
                 return;
             }
             
-            log(`Requesting stream from camera ${cameraId}`);
+            if (!currentRoom) {
+                log('Not in a room');
+                return;
+            }
+            
+            log(`Requesting stream from camera ${cameraId} in room ${currentRoom}`);
             ws.send(JSON.stringify({
                 type: 'requestStream',
                 cameraId: cameraId,
@@ -409,11 +510,21 @@
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     log(`Sending ICE candidate to camera ${cameraId}`);
-                    ws.send(JSON.stringify({
-                        type: 'iceCandidate',
-                        target: cameraId,
-                        candidate: event.candidate
-                    }));
+                    // Find the client ID for this camera
+                    let targetClientId = null;
+                    availableCameras.forEach((clientId, id) => {
+                        if (id === cameraId) {
+                            targetClientId = clientId;
+                        }
+                    });
+                    
+                    if (targetClientId && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'iceCandidate',
+                            target: targetClientId,
+                            candidate: event.candidate
+                        }));
+                    }
                 }
             };
             
@@ -445,7 +556,7 @@
                 log(`ICE connection state with camera ${cameraId}: ${peerConnection.iceConnectionState}`);
             };
             
-            // Store the peer connection using the cameraId as key
+            // Store the peer connection
             peerConnections.set(cameraId, peerConnection);
             return peerConnection;
         }
@@ -491,34 +602,6 @@
             }
             
             log(`Stopped viewing camera ${cameraId}`);
-        }
-        
-        // Create offer
-        async function createOffer(cameraId) {
-            try {
-                const peerConnection = peerConnections.get(cameraId);
-                if (!peerConnection) {
-                    log(`No peer connection found for camera ${cameraId}`);
-                    return;
-                }
-                
-                log(`Creating offer for camera ${cameraId}`);
-                const offer = await peerConnection.createOffer({
-                    offerToReceiveVideo: true, // Viewer wants to receive video
-                    offerToReceiveAudio: false
-                });
-                
-                await peerConnection.setLocalDescription(offer);
-                
-                log(`Sending offer to camera ${cameraId}`);
-                ws.send(JSON.stringify({
-                    type: 'offer',
-                    target: cameraId,
-                    sdp: offer
-                }));
-            } catch (error) {
-                log(`Error creating offer for camera ${cameraId}: ${error}`);
-            }
         }
         
         // Handle offer from camera
@@ -572,9 +655,22 @@
         async function handleAnswer(message) {
             try {
                 log(`Received answer from camera ${message.sender}`);
-                const peerConnection = peerConnections.get(message.sender);
+                // Find the cameraId for this sender
+                let cameraId = null;
+                availableCameras.forEach((clientId, id) => {
+                    if (clientId === message.sender) {
+                        cameraId = id;
+                    }
+                });
+                
+                if (!cameraId) {
+                    log(`Could not find camera ID for sender ${message.sender}`);
+                    return;
+                }
+                
+                const peerConnection = peerConnections.get(cameraId);
                 if (!peerConnection) {
-                    log(`No peer connection found for camera ${message.sender}`);
+                    log(`No peer connection found for camera ${cameraId}`);
                     return;
                 }
                 
@@ -583,7 +679,7 @@
                 log(`Error handling answer from camera ${message.sender}: ${error}`);
             }
         }
-
+        
         // Handle ICE candidate from camera
         async function handleIceCandidate(message) {
             try {
@@ -613,7 +709,7 @@
                 log(`Error handling ICE candidate from camera ${message.sender}: ${error}`);
             }
         }
-
+        
         // Make functions available globally for inline event handlers
         window.requestCameraStream = requestCameraStream;
         window.stopCameraStream = stopCameraStream;

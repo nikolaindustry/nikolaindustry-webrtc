@@ -89,6 +89,18 @@
             border-radius: 4px;
             margin: 20px 0;
         }
+        .room-controls {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .room-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e8f5e9;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
@@ -102,11 +114,24 @@
         <p>This page simulates an ESP32 camera device that:</p>
         <ul>
             <li>Connects to the signaling server with a unique camera ID</li>
-            <li>Registers as a camera device in the "cctv" room</li>
+            <li>Registers as a camera device in a specific room</li>
             <li>Waits for viewer requests to start streaming</li>
             <li>Provides one-way video streaming to viewers</li>
         </ul>
         <p>Viewers can then request to view this camera by its ID on the main viewer page.</p>
+    </div>
+    
+    <div class="room-controls">
+        <h3>Room Management</h3>
+        <div class="control-group">
+            <input type="text" id="roomNameInput" placeholder="Enter room name" value="cctv">
+            <button id="joinRoomBtn">Join Room</button>
+            <button id="leaveRoomBtn" disabled>Leave Room</button>
+        </div>
+        <div class="room-info">
+            <p>Current Room: <span id="currentRoom">Not in a room</span></p>
+            <p>Room Status: <span id="roomStatus">Disconnected</span></p>
+        </div>
     </div>
     
     <div id="status">Not connected</div>
@@ -152,6 +177,11 @@
         const localVideo = document.getElementById('localVideo');
         const viewerCountSpan = document.getElementById('viewerCount');
         const streamingStatusSpan = document.getElementById('streamingStatus');
+        const roomNameInput = document.getElementById('roomNameInput');
+        const joinRoomBtn = document.getElementById('joinRoomBtn');
+        const leaveRoomBtn = document.getElementById('leaveRoomBtn');
+        const currentRoomSpan = document.getElementById('currentRoom');
+        const roomStatusSpan = document.getElementById('roomStatus');
         
         // Variables
         let ws;
@@ -161,6 +191,7 @@
         let peerConnections = new Map();
         let viewerCount = 0;
         let isStreaming = false;
+        let currentRoom = null;
         
         // Configuration
         const config = {
@@ -212,31 +243,27 @@
                 statusDiv.style.backgroundColor = '#d4edda';
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
-                startStreamBtn.disabled = false;
+                joinRoomBtn.disabled = false;
             };
             
             ws.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 log(`Received: ${message.type}`);
-                console.log('Camera received message:', message); // Debug log
                 
                 switch (message.type) {
                     case 'welcome':
                         clientId = message.clientId;
                         log(`Assigned client ID: ${clientId}`);
-                        // Join the CCTV room as a camera immediately after getting client ID
-                        log(`Sending join message for camera ${cameraId}`);
-                        ws.send(JSON.stringify({
-                            type: 'join',
-                            room: 'cctv',
-                            deviceType: 'camera',
-                            cameraId: cameraId
-                        }));
                         break;
                         
                     case 'joined':
+                        currentRoom = message.room;
+                        currentRoomSpan.textContent = currentRoom;
+                        roomStatusSpan.textContent = 'Joined';
+                        roomStatusSpan.style.color = 'green';
                         log(`Joined room: ${message.room}`);
-                        console.log('Camera joined room:', message); // Debug log
+                        startStreamBtn.disabled = false;
+                        leaveRoomBtn.disabled = false;
                         break;
                         
                     case 'clientJoined':
@@ -273,6 +300,12 @@
                 disconnectBtn.disabled = true;
                 startStreamBtn.disabled = true;
                 stopStreamBtn.disabled = true;
+                joinRoomBtn.disabled = true;
+                leaveRoomBtn.disabled = true;
+                currentRoom = null;
+                currentRoomSpan.textContent = 'Not in a room';
+                roomStatusSpan.textContent = 'Disconnected';
+                roomStatusSpan.style.color = 'red';
                 
                 // Close all peer connections
                 peerConnections.forEach(pc => pc.close());
@@ -290,19 +323,6 @@
             ws.onerror = (error) => {
                 log(`WebSocket error: ${error}`);
             };
-            
-            // Remove the delayed join and move it to the welcome message handler above
-            // Join the CCTV room as a camera after a short delay
-            // setTimeout(() => {
-            //     if (ws && ws.readyState === WebSocket.OPEN) {
-            //         ws.send(JSON.stringify({
-            //             type: 'join',
-            //             room: 'cctv',
-            //             deviceType: 'camera',
-            //             cameraId: cameraId
-            //         }));
-            //     }
-            // }, 1000);
         };
         
         // Disconnect from server
@@ -310,6 +330,70 @@
             if (ws) {
                 ws.close();
             }
+        };
+        
+        // Join room
+        joinRoomBtn.onclick = () => {
+            const roomName = roomNameInput.value.trim();
+            if (!roomName) {
+                alert('Please enter a room name');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server');
+                return;
+            }
+            
+            // Leave current room if in one
+            if (currentRoom) {
+                log(`Leaving room ${currentRoom}`);
+            }
+            
+            // Join new room
+            log(`Joining room: ${roomName}`);
+            ws.send(JSON.stringify({
+                type: 'join',
+                room: roomName,
+                deviceType: 'camera',
+                cameraId: cameraId
+            }));
+        };
+        
+        // Leave current room
+        leaveRoomBtn.onclick = () => {
+            if (!currentRoom) {
+                log('Not in a room');
+                return;
+            }
+            
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server');
+                return;
+            }
+            
+            // Close all peer connections
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            viewerCount = 0;
+            viewerCountSpan.textContent = viewerCount;
+            
+            // Leave room by joining default room
+            log(`Leaving room ${currentRoom}`);
+            ws.send(JSON.stringify({
+                type: 'join',
+                room: 'default',
+                deviceType: 'camera',
+                cameraId: cameraId
+            }));
+            
+            currentRoom = null;
+            currentRoomSpan.textContent = 'Not in a room';
+            roomStatusSpan.textContent = 'Disconnected';
+            roomStatusSpan.style.color = 'red';
+            startStreamBtn.disabled = true;
+            stopStreamBtn.disabled = true;
+            leaveRoomBtn.disabled = true;
         };
         
         // Start streaming (manual mode)
@@ -341,6 +425,11 @@
         
         // Handle viewer request for stream
         function handleViewerRequest(message) {
+            if (!isStreaming) {
+                log(`Viewer ${message.viewerId} requested stream, but streaming is not enabled`);
+                return;
+            }
+            
             log(`Creating connection for viewer ${message.viewerId}`);
             viewerCount++;
             viewerCountSpan.textContent = viewerCount;
@@ -364,11 +453,13 @@
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     log(`Sending ICE candidate to viewer ${viewerId}`);
-                    ws.send(JSON.stringify({
-                        type: 'iceCandidate',
-                        target: viewerId,
-                        candidate: event.candidate
-                    }));
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'iceCandidate',
+                            target: viewerId,
+                            candidate: event.candidate
+                        }));
+                    }
                 }
             };
             
@@ -402,26 +493,15 @@
                 await peerConnection.setLocalDescription(offer);
                 
                 log(`Sending offer to viewer ${viewerId}`);
-                ws.send(JSON.stringify({
-                    type: 'offer',
-                    target: viewerId,
-                    sdp: offer
-                }));
-                
-                // Process any queued ICE candidates
-                if (peerConnection.pendingIceCandidates) {
-                    log(`Processing ${peerConnection.pendingIceCandidates.length} queued ICE candidates for viewer ${viewerId}`);
-                    for (const candidate of peerConnection.pendingIceCandidates) {
-                        try {
-                            await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                        } catch (error) {
-                            log(`Error adding queued ICE candidate: ${error}`);
-                        }
-                    }
-                    delete peerConnection.pendingIceCandidates;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'offer',
+                        target: viewerId,
+                        sdp: offer
+                    }));
                 }
             } catch (error) {
-                log(`Error creating offer for viewer ${viewerId}: ${error}`);
+                log(`Error creating offer: ${error}`);
             }
         }
         
@@ -447,16 +527,18 @@
                 await peerConnection.setLocalDescription(answer);
                 
                 log(`Sending answer to viewer ${message.sender}`);
-                ws.send(JSON.stringify({
-                    type: 'answer',
-                    target: message.sender,
-                    sdp: answer
-                }));
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'answer',
+                        target: message.sender,
+                        sdp: answer
+                    }));
+                }
             } catch (error) {
                 log(`Error handling offer: ${error}`);
             }
         }
-
+        
         // Handle answer from viewer
         async function handleAnswer(message) {
             try {
@@ -469,10 +551,10 @@
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
-                log(`Error handling answer from viewer ${message.sender}: ${error}`);
+                log(`Error handling answer: ${error}`);
             }
         }
-
+        
         // Handle ICE candidate from viewer
         async function handleIceCandidate(message) {
             try {
@@ -483,20 +565,9 @@
                     return;
                 }
                 
-                // Check if remote description is set before adding ICE candidate
-                if (!peerConnection.remoteDescription || !peerConnection.remoteDescription.type) {
-                    log(`Remote description not set yet for viewer ${message.sender}, queuing ICE candidate`);
-                    // Queue the ICE candidate to be added later
-                    if (!peerConnection.pendingIceCandidates) {
-                        peerConnection.pendingIceCandidates = [];
-                    }
-                    peerConnection.pendingIceCandidates.push(message.candidate);
-                    return;
-                }
-                
                 await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
             } catch (error) {
-                log(`Error handling ICE candidate from viewer ${message.sender}: ${error}`);
+                log(`Error handling ICE candidate: ${error}`);
             }
         }
     </script>
