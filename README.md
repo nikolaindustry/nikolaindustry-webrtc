@@ -1,14 +1,16 @@
-# WebRTC CCTV Test Server
+# WebRTC Signaling Server
 
-A simple test server for the standalone WebRTC Viewer and Camera applications.
+A lightweight WebRTC signaling server built with Node.js and WebSocket to facilitate peer-to-peer video streaming connections. This server handles the exchange of SDP offers/answers and ICE candidates between peers but does not relay the actual video streams.
 
-## Overview
+## Features
 
-This test server allows you to run and test the standalone Viewer and Camera applications without needing the full backend infrastructure. It provides:
-
-- WebSocket signaling server for WebRTC communication
-- Static file serving for the browser-based applications
-- Basic message handling for testing purposes
+- WebSocket-based real-time signaling
+- Room-based client organization
+- Exchange of SDP offers/answers for connection negotiation
+- ICE candidate exchange for NAT traversal
+- Simple web interface for testing
+- Programmatic API for code-based integration
+- Cross-platform compatibility (Windows, Linux, macOS, embedded systems)
 
 ## Prerequisites
 
@@ -17,70 +19,234 @@ This test server allows you to run and test the standalone Viewer and Camera app
 
 ## Installation
 
-1. Install dependencies:
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd webrtc-signaling-server
+   ```
+
+2. Install dependencies:
    ```bash
    npm install
    ```
 
 ## Usage
 
-Start the test server:
+### Development
+
+To run the server in development mode with auto-restart:
+```bash
+npm run dev
+```
+
+### Production
+
+To run the server in production mode:
 ```bash
 npm start
 ```
 
-The server will start on port 8080 by default and serve:
+The server will start on port 8080 by default, or the PORT environment variable if set.
 
-- Viewer application at http://localhost:8080/viewer/
-- Camera application at http://localhost:8080/camera/
-- Health check endpoint at http://localhost:8080/health
+## API Endpoints
+
+- `GET /` - Serve the main viewer interface
+- `GET /camera-simulator.html` - Serve the camera simulator interface
+- `GET /health` - Health check endpoint
+- WebSocket connection at `/` - Signaling communication
+
+## WebSocket Message Types
+
+### Client to Server
+
+1. `join` - Join a room
+   ```json
+   {
+     "type": "join",
+     "room": "room-name"
+   }
+   ```
+
+2. `offer` - Send SDP offer to another client
+   ```json
+   {
+     "type": "offer",
+     "target": "target-client-id",
+     "sdp": { /* SDP offer object */ }
+   }
+   ```
+
+3. `answer` - Send SDP answer to another client
+   ```json
+   {
+     "type": "answer",
+     "target": "target-client-id",
+     "sdp": { /* SDP answer object */ }
+   }
+   ```
+
+4. `iceCandidate` - Send ICE candidate to another client
+   ```json
+   {
+     "type": "iceCandidate",
+     "target": "target-client-id",
+     "candidate": { /* ICE candidate object */ }
+   }
+   ```
+
+5. `requestStream` - Request stream from a specific camera
+   ```json
+   {
+     "type": "requestStream",
+     "cameraId": "camera-identifier"
+   }
+   ```
+
+### Server to Client
+
+1. `welcome` - Sent when client connects
+   ```json
+   {
+     "type": "welcome",
+     "clientId": "assigned-client-id"
+   }
+   ```
+
+2. `joined` - Sent when client successfully joins a room
+   ```json
+   {
+     "type": "joined",
+     "room": "room-name"
+   }
+   ```
+
+3. `clientJoined` - Sent when another client joins the same room
+   ```json
+   {
+     "type": "clientJoined",
+     "clientId": "joining-client-id",
+     "deviceType": "camera|viewer",
+     "cameraId": "camera-identifier" // For cameras
+   }
+   ```
+
+4. `clientDisconnected` - Sent when another client disconnects
+   ```json
+   {
+     "type": "clientDisconnected",
+     "clientId": "disconnected-client-id"
+   }
+   ```
+
+5. `offer` - Receive SDP offer from another client
+   ```json
+   {
+     "type": "offer",
+     "sender": "sender-client-id",
+     "sdp": { /* SDP offer object */ }
+   }
+   ```
+
+6. `answer` - Receive SDP answer from another client
+   ```json
+   {
+     "type": "answer",
+     "sender": "sender-client-id",
+     "sdp": { /* SDP answer object */ }
+   }
+   ```
+
+7. `iceCandidate` - Receive ICE candidate from another client
+   ```json
+   {
+     "type": "iceCandidate",
+     "sender": "sender-client-id",
+     "candidate": { /* ICE candidate object */ }
+   }
+   ```
+
+8. `viewerRequest` - Notification to a camera that a viewer wants to connect
+   ```json
+   {
+     "type": "viewerRequest",
+     "viewerId": "viewer-client-id"
+   }
+   ```
+
+9. `cameraAvailable` - Notification that a camera is available in the room
+   ```json
+   {
+     "type": "cameraAvailable",
+     "cameraId": "camera-identifier",
+     "clientId": "camera-client-id"
+   }
+   ```
+
+10. `cameraUnavailable` - Notification that a camera is no longer available
+    ```json
+    {
+      "type": "cameraUnavailable",
+      "cameraId": "camera-identifier",
+      "clientId": "camera-client-id"
+    }
+    ```
+
+11. `cameraNotFound` - Notification that a requested camera was not found
+    ```json
+    {
+      "type": "cameraNotFound",
+      "cameraId": "camera-identifier"
+    }
+    ```
+
+## Deployment on Render.com
+
+This server is configured for deployment on Render.com using the provided `render.yaml` file. Simply connect your GitHub repository to Render and it will automatically deploy the service.
+
+Environment variables:
+- `PORT` - The port to listen on (automatically set by Render)
+
+## Testing
+
+Open your browser to `http://localhost:8080` (or your deployed URL) to access the viewer interface. You can also access the camera simulator at `http://localhost:8080/camera-simulator.html`.
+
+You'll need to open two browser windows or tabs to test the peer-to-peer connection:
+1. Open `http://localhost:8080/camera-simulator.html` to simulate a camera
+2. Open `http://localhost:8080` to view the camera stream
 
 ## How It Works
 
-The test server provides a minimal implementation of the WebRTC signaling protocol:
+1. Clients connect to the WebSocket server and are assigned unique IDs
+2. Clients join rooms to find peers
+3. Cameras register with unique identifiers
+4. Viewers request streams from specific cameras by ID
+5. When a viewer requests a stream:
+   - The server notifies the camera of the viewer request
+   - The camera creates an SDP offer and sends it to the viewer via the signaling server
+   - The viewer responds with an SDP answer
+   - Both clients exchange ICE candidates to establish the peer-to-peer connection
+6. Once the signaling process is complete, the video streams flow directly between peers
 
-1. Clients connect to the WebSocket server
-2. Clients are assigned unique IDs
-3. Clients can join rooms
-4. Basic message routing is implemented
+## Programmatic API
 
-This is intended for testing purposes only and does not provide full WebRTC functionality.
+This server includes a comprehensive programmatic API for code-based integration with cross-platform compatibility:
 
-## Directory Structure
+- **CameraClient**: For creating camera clients that can register and stream
+- **ViewerClient**: For creating viewer clients that can request and receive streams
+- **WebRTCCCTVClient**: Base class with common functionality
+- Cross-platform support for Windows, Linux, macOS, and embedded systems
+- Browser and Node.js compatibility
 
-```
-├── Camera/              # Standalone camera application
-├── Viewer/              # Standalone viewer application
-├── test-server.js       # Test server implementation
-├── package.json         # Test server dependencies
-```
+The API is located in `lib/webrtc-cctv-api.js` and can be used to create custom camera and viewer applications.
 
-## Testing the Applications
+## Security Considerations
 
-1. Start the test server:
-   ```bash
-   npm start
-   ```
-
-2. Open the camera application in one browser tab:
-   http://localhost:8080/camera/
-
-3. Open the viewer application in another browser tab:
-   http://localhost:8080/viewer/
-
-4. Configure both applications to use ws://localhost:8080 as the server URL
-
-## Limitations
-
-This test server is for development and testing purposes only. It has several limitations:
-
-- No actual WebRTC media streaming
-- Minimal message handling
-- No persistence
-- No security features
-- No camera registration tracking
-
-For production use, use the full WebRTC backend infrastructure.
+This is a basic implementation for demonstration purposes. For production use, consider adding:
+- Authentication and authorization
+- Rate limiting
+- Input validation and sanitization
+- TLS/SSL encryption
+- CORS configuration
 
 ## License
 

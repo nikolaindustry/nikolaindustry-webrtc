@@ -20,6 +20,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Camera simulator endpoint
+app.get('/camera-simulator.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'camera-simulator.html'));
+});
+
 // Create WebSocket server
 const wss = new WebSocket.Server({ server });
 
