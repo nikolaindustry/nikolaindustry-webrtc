@@ -162,6 +162,23 @@ function handleSignalingMessage(sender, message) {
           clientId: sender.clientId
         }, sender);
       }
+      
+      // If this is a viewer, send them the list of currently available cameras
+      if (!sender.deviceType || sender.deviceType === 'viewer') {
+        // Find all available cameras in this room and notify the new viewer
+        clients.forEach((client, clientId) => {
+          if (client !== sender && 
+              client.room === room && 
+              client.deviceType === 'camera' && 
+              client.cameraId) {
+            sender.send(JSON.stringify({
+              type: 'cameraAvailable',
+              cameraId: client.cameraId,
+              clientId: clientId
+            }));
+          }
+        });
+      }
       break;
       
     case 'requestStream':
