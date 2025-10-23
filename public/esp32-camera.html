@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Camera Simulator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        input, button {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        #status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+        }
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .local-video {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .local-video h3 {
+            margin-top: 0;
+        }
+        video {
+            width: 100%;
+            height: 300px;
+            background-color: #000;
+        }
+        .log {
+            height: 200px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f9f9f9;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .info-panel {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ESP32 Camera Simulator</h1>
+        <p>Simulates an ESP32 camera device connecting to the WebRTC signaling server</p>
+    </div>
+    
+    <div class="info-panel">
+        <h3>About this Simulator</h3>
+        <p>This page simulates an ESP32 camera device that:</p>
+        <ul>
+            <li>Connects to the signaling server with a unique camera ID</li>
+            <li>Registers as a camera device in the "cctv" room</li>
+            <li>Waits for viewer requests to start streaming</li>
+            <li>Provides one-way video streaming to viewers</li>
+        </ul>
+        <p>Viewers can then request to view this camera by its ID on the main viewer page.</p>
+    </div>
+    
+    <div id="status">Not connected</div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <input type="text" id="cameraIdInput" placeholder="Enter Camera ID" value="ESP32-SIM-001">
+            <button id="connectBtn">Connect as Camera</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+        
+        <div class="control-group">
+            <button id="startStreamBtn" disabled>Start Streaming</button>
+            <button id="stopStreamBtn" disabled>Stop Streaming</button>
+        </div>
+    </div>
+    
+    <div class="video-container">
+        <div class="local-video">
+            <h3>Local Camera Preview</h3>
+            <video id="localVideo" autoplay muted></video>
+        </div>
+    </div>
+    
+    <div class="info-panel">
+        <h3>Connection Status</h3>
+        <p>Connected Viewers: <span id="viewerCount">0</span></p>
+        <p>Streaming Status: <span id="streamingStatus">Not streaming</span></p>
+    </div>
+    
+    <h3>Connection Log</h3>
+    <div id="log" class="log"></div>
+
+    <script>
+        // DOM elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const startStreamBtn = document.getElementById('startStreamBtn');
+        const stopStreamBtn = document.getElementById('stopStreamBtn');
+        const cameraIdInput = document.getElementById('cameraIdInput');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        const localVideo = document.getElementById('localVideo');
+        const viewerCountSpan = document.getElementById('viewerCount');
+        const streamingStatusSpan = document.getElementById('streamingStatus');
+        
+        // Variables
+        let ws;
+        let clientId;
+        let cameraId;
+        let localStream;
+        let peerConnections = new Map();
+        let viewerCount = 0;
+        let isStreaming = false;
+        
+        // Configuration
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        
+        // Log function
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${time}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        // Connect to signaling server as camera
+        connectBtn.onclick = async () => {
+            cameraId = cameraIdInput.value.trim();
+            if (!cameraId) {
+                alert('Please enter a camera ID');
+                return;
+            }
+            
+            try {
+                // Get local media stream
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: false 
+                });
+                localVideo.srcObject = localStream;
+                log('Local video stream acquired');
+            } catch (error) {
+                log(`Error accessing media devices: ${error}`);
+                alert('Could not access camera. Please ensure you have a camera connected and have granted permission.');
+                return;
+            }
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const wsUrl = protocol + window.location.host;
+            
+            log(`Connecting to signaling server at ${wsUrl} as camera ${cameraId}`);
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('Connected to signaling server');
+                statusDiv.textContent = `Connected as camera ${cameraId}`;
+                statusDiv.style.backgroundColor = '#d4edda';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                startStreamBtn.disabled = false;
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                log(`Received: ${message.type}`);
+                
+                switch (message.type) {
+                    case 'welcome':
+                        clientId = message.clientId;
+                        log(`Assigned client ID: ${clientId}`);
+                        break;
+                        
+                    case 'joined':
+                        log(`Joined room: ${message.room}`);
+                        break;
+                        
+                    case 'viewerRequest':
+                        log(`Viewer ${message.viewerId} requested stream`);
+                        handleViewerRequest(message);
+                        break;
+                        
+                    case 'offer':
+                        handleOffer(message);
+                        break;
+                        
+                    case 'answer':
+                        handleAnswer(message);
+                        break;
+                        
+                    case 'iceCandidate':
+                        handleIceCandidate(message);
+                        break;
+                        
+                    default:
+                        log(`Unknown message type: ${message.type}`);
+                }
+            };
+            
+            ws.onclose = () => {
+                log('Disconnected from signaling server');
+                statusDiv.textContent = 'Disconnected from signaling server';
+                statusDiv.style.backgroundColor = '#f8d7da';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                startStreamBtn.disabled = true;
+                stopStreamBtn.disabled = true;
+                
+                // Close all peer connections
+                peerConnections.forEach(pc => pc.close());
+                peerConnections.clear();
+                viewerCount = 0;
+                viewerCountSpan.textContent = viewerCount;
+                
+                // Stop local stream
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                }
+            };
+            
+            ws.onerror = (error) => {
+                log(`WebSocket error: ${error}`);
+            };
+            
+            // Join the CCTV room as a camera after a short delay
+            setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        room: 'cctv',
+                        deviceType: 'camera',
+                        cameraId: cameraId
+                    }));
+                }
+            }, 1000);
+        };
+        
+        // Disconnect from server
+        disconnectBtn.onclick = () => {
+            if (ws) {
+                ws.close();
+            }
+        };
+        
+        // Start streaming (manual mode)
+        startStreamBtn.onclick = () => {
+            isStreaming = true;
+            streamingStatusSpan.textContent = 'Streaming';
+            streamingStatusSpan.style.color = 'green';
+            startStreamBtn.disabled = true;
+            stopStreamBtn.disabled = false;
+            log('Manual streaming started');
+        };
+        
+        // Stop streaming
+        stopStreamBtn.onclick = () => {
+            isStreaming = false;
+            streamingStatusSpan.textContent = 'Not streaming';
+            streamingStatusSpan.style.color = 'black';
+            startStreamBtn.disabled = false;
+            stopStreamBtn.disabled = true;
+            
+            // Close all peer connections
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            viewerCount = 0;
+            viewerCountSpan.textContent = viewerCount;
+            
+            log('Streaming stopped');
+        };
+        
+        // Handle viewer request for stream
+        function handleViewerRequest(message) {
+            log(`Creating connection for viewer ${message.viewerId}`);
+            viewerCount++;
+            viewerCountSpan.textContent = viewerCount;
+            
+            createPeerConnection(message.viewerId);
+            createOffer(message.viewerId);
+        }
+        
+        // Create peer connection
+        function createPeerConnection(viewerId) {
+            const peerConnection = new RTCPeerConnection(config);
+            
+            // Add media tracks (video only for CCTV)
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
+            
+            // Handle ICE candidates
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log(`Sending ICE candidate to viewer ${viewerId}`);
+                    ws.send(JSON.stringify({
+                        type: 'iceCandidate',
+                        target: viewerId,
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            // Handle connection state changes
+            peerConnection.onconnectionstatechange = () => {
+                log(`Connection state with viewer ${viewerId}: ${peerConnection.connectionState}`);
+                if (peerConnection.connectionState === 'disconnected' || 
+                    peerConnection.connectionState === 'failed') {
+                    peerConnections.delete(viewerId);
+                    viewerCount = Math.max(0, viewerCount - 1);
+                    viewerCountSpan.textContent = viewerCount;
+                }
+            };
+            
+            // Store peer connection
+            peerConnections.set(viewerId, peerConnection);
+            return peerConnection;
+        }
+        
+        // Create offer
+        async function createOffer(viewerId) {
+            try {
+                const peerConnection = peerConnections.get(viewerId);
+                if (!peerConnection) return;
+                
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveVideo: false, // Camera sends video, doesn't receive
+                    offerToReceiveAudio: false
+                });
+                
+                await peerConnection.setLocalDescription(offer);
+                
+                log(`Sending offer to viewer ${viewerId}`);
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    target: viewerId,
+                    sdp: offer
+                }));
+            } catch (error) {
+                log(`Error creating offer: ${error}`);
+            }
+        }
+        
+        // Handle offer from viewer (shouldn't happen in this architecture)
+        async function handleOffer(message) {
+            try {
+                log(`Received unexpected offer from viewer ${message.sender}`);
+                
+                let peerConnection;
+                if (peerConnections.has(message.sender)) {
+                    peerConnection = peerConnections.get(message.sender);
+                } else {
+                    peerConnection = createPeerConnection(message.sender);
+                }
+                
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
+                
+                const answer = await peerConnection.createAnswer({
+                    offerToReceiveVideo: false,
+                    offerToReceiveAudio: false
+                });
+                
+                await peerConnection.setLocalDescription(answer);
+                
+                log(`Sending answer to viewer ${message.sender}`);
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    target: message.sender,
+                    sdp: answer
+                }));
+            } catch (error) {
+                log(`Error handling offer: ${error}`);
+            }
+        }
+        
+        // Handle answer from viewer
+        async function handleAnswer(message) {
+            try {
+                log(`Received answer from viewer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
+                if (!peerConnection) {
+                    log(`No peer connection found for viewer ${message.sender}`);
+                    return;
+                }
+                
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
+            } catch (error) {
+                log(`Error handling answer: ${error}`);
+            }
+        }
+        
+        // Handle ICE candidate from viewer
+        async function handleIceCandidate(message) {
+            try {
+                log(`Received ICE candidate from viewer ${message.sender}`);
+                const peerConnection = peerConnections.get(message.sender);
+                if (!peerConnection) {
+                    log(`No peer connection found for viewer ${message.sender}`);
+                    return;
+                }
+                
+                await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+            } catch (error) {
+                log(`Error handling ICE candidate: ${error}`);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -98,12 +98,47 @@
             font-size: 12px;
             margin-top: 20px;
         }
+        .info-panel {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .nav-links {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .nav-links a {
+            margin: 0 10px;
+            padding: 10px 15px;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .nav-links a:hover {
+            background-color: #1976D2;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>WebRTC CCTV Viewer</h1>
         <p>Connect to view live footage from ESP32 cameras</p>
+    </div>
+    
+    <div class="nav-links">
+        <a href="/">Viewer Page</a>
+        <a href="/esp32-camera.html">ESP32 Camera Simulator</a>
+    </div>
+    
+    <div class="info-panel">
+        <h3>How to Use This System</h3>
+        <p>1. <a href="/esp32-camera.html">Open the ESP32 Camera Simulator</a> to simulate a camera device</p>
+        <p>2. Connect as a camera with a unique ID</p>
+        <p>3. Return to this page and connect as a viewer</p>
+        <p>4. Request to view the camera by its ID</p>
+        <p>5. View live footage from the simulated camera</p>
     </div>
     
     <div id="status">Not connected</div>
@@ -270,6 +305,7 @@
                     ws.send(JSON.stringify({
                         type: 'join',
                         room: 'cctv'
+                        // Viewers don't need to specify deviceType, it defaults to 'viewer'
                     }));
                 }
             }, 1000);
