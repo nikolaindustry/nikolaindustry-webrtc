@@ -17,6 +17,11 @@ app.get('/health', (req, res) => {
 
 // Main endpoint
 app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+});
+
+// Viewer interface endpoint
+app.get('/viewer', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

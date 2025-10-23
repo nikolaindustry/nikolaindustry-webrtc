@@ -606,7 +606,7 @@
                 // Get local media stream
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: true, 
-                    audio: false 
+                    audio: true 
                 });
                 localVideo.srcObject = localStream;
                 videoPlaceholder.style.display = 'none';
@@ -868,7 +868,7 @@
                 
                 const offer = await peerConnection.createOffer({
                     offerToReceiveVideo: false, // Camera sends video, doesn't receive
-                    offerToReceiveAudio: false
+                    offerToReceiveAudio: true
                 });
                 
                 await peerConnection.setLocalDescription(offer);
@@ -902,7 +902,7 @@
                 
                 const answer = await peerConnection.createAnswer({
                     offerToReceiveVideo: false,
-                    offerToReceiveAudio: false
+                    offerToReceiveAudio: true
                 });
                 
                 await peerConnection.setLocalDescription(answer);
