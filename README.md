@@ -244,6 +244,7 @@ For programmatic API testing, see the examples in the `examples/` directory:
 For ESP32 camera integration, see the examples in the `iot/` directory:
 - `iot/esp32_camera.js` - Direct ESP32 camera client implementation
 - `iot/esp32_camera_api.js` - ESP32 camera using programmatic API
+- `iot/esp32_cam_webrtc.ino` - Native ESP32 Arduino implementation
 
 ## How It Works
 
@@ -276,7 +277,7 @@ The system supports ESP32 camera modules through two approaches:
 
 1. **Node.js Bridge Approach**: Uses a companion device (Raspberry Pi, etc.) that communicates with the ESP32 camera module and handles WebRTC signaling using the programmatic API.
 
-2. **Native ESP32 Approach**: Implements WebRTC directly on the ESP32 (more complex, limited by hardware constraints).
+2. **Native ESP32 Approach**: Implements WebSocket signaling directly on the ESP32 using the Arduino framework. See [iot/esp32_cam_webrtc.ino](file:///C:/Users/user/Documents/GitHub/webrtc/iot/esp32_cam_webrtc.ino) for an example implementation.
 
 See [ESP32 Integration Guide](ESP32_GUIDE.md) for detailed implementation instructions.
 

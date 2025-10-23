@@ -1,7 +1,7 @@
 {
   "name": "webrtc-iot-client",
   "version": "1.0.0",
-  "description": "WebRTC client for IoT devices",
+  "description": "WebRTC client for IoT devices including ESP32 camera modules",
   "main": "esp32_camera.js",
   "scripts": {
     "start": "node esp32_camera.js",
@@ -21,5 +21,13 @@
     "streaming"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/webrtc-signaling-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/webrtc-signaling-server/issues"
+  },
+  "homepage": "https://github.com/your-username/webrtc-signaling-server#readme"
 }

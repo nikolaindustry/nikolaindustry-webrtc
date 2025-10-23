@@ -16,7 +16,15 @@ The WebRTC CCTV API provides a programmatic interface that enables ESP32 camera 
 
 - Arduino IDE or PlatformIO
 - ESP32 board support
-- WebRTC library for ESP32 (if available)
+- Required libraries (listed below)
+
+## Required Libraries
+
+For the Arduino implementation, you'll need to install these libraries through the Arduino Library Manager:
+
+1. **ArduinoWebSockets** - For WebSocket communication
+2. **ArduinoJson** - For JSON parsing and creation
+3. **ESP32Camera** - For camera control (usually included with ESP32 core)
 
 ## Implementation Approaches
 
@@ -28,7 +36,7 @@ Use a Node.js application on a companion device (Raspberry Pi, etc.) that commun
 
 ### 2. Native ESP32 Approach
 
-Implement WebRTC directly on the ESP32 (more complex, limited by hardware constraints).
+Implement WebRTC signaling directly on the ESP32 (more complex, limited by hardware constraints).
 
 ## Node.js Bridge Approach
 
@@ -39,6 +47,7 @@ This approach uses a companion device that communicates with the ESP32 camera mo
 ```
 webrtc/
 ├── iot/
+│   ├── esp32_cam_webrtc.ino    # Native ESP32 Arduino implementation
 │   ├── esp32_camera_api.js     # ESP32 camera implementation using WebRTC CCTV API
 │   ├── esp32_client.js         # Direct WebRTC client implementation
 │   ├── esp32_camera.js         # Example ESP32 camera using direct client
@@ -90,85 +99,82 @@ const camera = new CameraClient({
   room: ROOM_NAME
 });
 
-// Set up event listeners
-camera.on('connected', () => {
-  console.log(`ESP32 camera connected to server`);
-});
-
-camera.on('registered', (data) => {
-  console.log(`Camera registered in room: ${data.room}`);
-  // Start streaming after registration
-  camera.startStreaming();
-});
-
-camera.on('viewerRequest', (message) => {
-  console.log(`Viewer ${message.viewerId} requested stream`);
-});
-
-// Connect and register camera
-camera.register();
+await camera.register();
 ```
 
 ## Native ESP32 Approach
 
-For a native implementation on ESP32, you would need to:
+For a native implementation on ESP32, you would implement the WebSocket signaling directly on the ESP32.
 
-1. **Use ESP-IDF or Arduino framework**
-2. **Implement WebRTC signaling** using HTTP/WebSocket libraries
-3. **Handle SDP offer/answer exchange**
-4. **Manage ICE candidates**
-5. **Stream video data** from the camera module
+### ESP32 Implementation ([iot/esp32_cam_webrtc.ino](file:///C:/Users/user/Documents/GitHub/webrtc/iot/esp32_cam_webrtc.ino))
 
-### Required Libraries
+The provided [esp32_cam_webrtc.ino](file:///C:/Users/user/Documents/GitHub/webrtc/iot/esp32_cam_webrtc.ino) file demonstrates how to:
 
-- ArduinoWebSockets or similar WebSocket library
-- ESP32-CAM library for camera control
-- JSON library for message parsing
+1. Connect to WiFi
+2. Connect to the WebSocket signaling server
+3. Register as a camera with a unique ID
+4. Handle viewer requests
+5. Capture and send frame information
 
-### Example Structure
+### Setup Instructions
 
-```cpp
-#include <WebSocketsClient.h>
-#include <esp_camera.h>
+1. **Install ESP32 support in Arduino IDE**:
+   - Go to File > Preferences
+   - Add this URL to Additional Board Manager URLs:
+     ```
+     https://dl.espressif.com/dl/package_esp32_index.json
+     ```
+   - Go to Tools > Board > Boards Manager
+   - Search for and install "ESP32"
 
-WebSocketsClient webSocket;
+2. **Install required libraries**:
+   - Go to Tools > Manage Libraries
+   - Search for and install:
+     - "WebSockets" by Links2004
+     - "ArduinoJson" by Benoit Blanchon
 
-void setup() {
-  // Initialize camera
-  camera_config_t config;
-  // ... camera configuration ...
-  esp_camera_init(&config);
-  
-  // Connect to WebSocket server
-  webSocket.begin("server-ip", 8080, "/");
-  webSocket.onEvent(webSocketEvent);
-}
+3. **Configure the code**:
+   - Update WiFi credentials:
+     ```cpp
+     const char* ssid = "YOUR_WIFI_SSID";
+     const char* password = "YOUR_WIFI_PASSWORD";
+     ```
+   - Update server address:
+     ```cpp
+     const char* serverAddress = "192.168.1.100";  // Your server IP
+     ```
 
-void loop() {
-  webSocket.loop();
-  
-  // Capture and send video frames
-  if (streaming) {
-    camera_fb_t * fb = esp_camera_fb_get();
-    if (fb) {
-      // Send frame via WebSocket
-      webSocket.sendBIN(fb->buf, fb->len);
-      esp_camera_fb_return(fb);
-    }
-  }
-}
+4. **Upload to ESP32-CAM**:
+   - Select "ESP32 Wrover Module" as board
+   - Set Flash Frequency to 80MHz
+   - Set Flash Mode to QIO
+   - Set PSRAM to Enabled
+   - Connect ESP32-CAM via FTDI programmer
+   - Upload the sketch
 
-void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
-  switch(type) {
-    case WStype_CONNECTED:
-      // Send join message
-      break;
-    case WStype_TEXT:
-      // Handle signaling messages
-      break;
-  }
-}
-```
+### Key Features of the ESP32 Implementation
+
+1. **WiFi Connection Management**
+2. **WebSocket Signaling** with the server
+3. **Camera Initialization** and configuration
+4. **Viewer Request Handling**
+5. **Frame Capture** and information reporting
+6. **Status Reporting** to the server
+
+### Limitations
+
+The native ESP32 implementation has some limitations:
+
+1. **No actual WebRTC media streaming** - Only signaling is implemented
+2. **Limited JSON processing** capabilities
+3. **Memory constraints** on complex operations
+4. **No camera stream encoding** to WebRTC-compatible formats
+
+For actual video streaming, you would need to:
+
+1. Implement a WebRTC stack on ESP32 (very complex)
+2. Use a companion device for media processing
+3. Implement custom streaming protocols
 
 ## API Integration
 
@@ -310,3 +316,5 @@ camera.on('error', (error) => {
 ## Conclusion
 
 The WebRTC CCTV API provides a robust foundation for integrating ESP32 camera modules into a real-time video streaming system. The Node.js bridge approach is recommended for most use cases due to its simplicity and the availability of mature WebRTC libraries.
+
+For native ESP32 implementations, the provided [esp32_cam_webrtc.ino](file:///C:/Users/user/Documents/GitHub/webrtc/iot/esp32_cam_webrtc.ino) serves as a starting point for handling WebSocket signaling with the server.
