@@ -3,45 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebRTC Signaling Server Test</title>
+    <title>WebRTC CCTV Viewer</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
-        .video-container {
-            display: flex;
-            justify-content: space-around;
-            margin: 20px 0;
-        }
-        video {
-            width: 300px;
-            height: 200px;
-            border: 1px solid #ccc;
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
         }
         .controls {
-            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        input, button {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
         button {
-            padding: 10px 15px;
-            margin: 5px;
             background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 4px;
             cursor: pointer;
         }
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
         #status {
             padding: 10px;
             margin: 10px 0;
             border-radius: 4px;
             background-color: #f0f0f0;
+        }
+        .cameras-container {
+            margin: 20px 0;
+        }
+        .camera-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .camera-item button {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .video-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .video-item {
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .video-item h3 {
+            margin-top: 0;
+        }
+        video {
+            width: 100%;
+            height: 300px;
+            background-color: #000;
         }
         .log {
             height: 200px;
@@ -51,53 +96,66 @@
             background-color: #f9f9f9;
             font-family: monospace;
             font-size: 12px;
+            margin-top: 20px;
         }
     </style>
 </head>
 <body>
-    <h1>WebRTC Signaling Server Test</h1>
+    <div class="header">
+        <h1>WebRTC CCTV Viewer</h1>
+        <p>Connect to view live footage from ESP32 cameras</p>
+    </div>
     
     <div id="status">Not connected</div>
     
-    <div class="video-container">
-        <div>
-            <h3>Local Video</h3>
-            <video id="localVideo" autoplay muted></video>
-        </div>
-        <div>
-            <h3>Remote Video</h3>
-            <video id="remoteVideo" autoplay></video>
-        </div>
-    </div>
-    
     <div class="controls">
-        <button id="connectBtn">Connect to Server</button>
-        <button id="startBtn" disabled>Start Video</button>
-        <button id="callBtn" disabled>Call Peer</button>
-        <button id="hangupBtn" disabled>Hang Up</button>
+        <div class="control-group">
+            <button id="connectBtn">Connect to Server</button>
+            <button id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+        
+        <div class="control-group">
+            <input type="text" id="cameraIdInput" placeholder="Enter Camera ID to view">
+            <button id="viewBtn" disabled>View Camera</button>
+        </div>
+        
+        <div class="control-group">
+            <button id="refreshBtn" disabled>Refresh Camera List</button>
+        </div>
     </div>
     
-    <h3>Signaling Log</h3>
+    <div class="cameras-container">
+        <h2>Available Cameras</h2>
+        <div id="camerasList">
+            <p>No cameras available. Connect cameras to the network.</p>
+        </div>
+    </div>
+    
+    <div class="video-container" id="videoContainer">
+        <!-- Video streams will be added here dynamically -->
+    </div>
+    
+    <h3>Connection Log</h3>
     <div id="log" class="log"></div>
 
     <script>
         // DOM elements
         const connectBtn = document.getElementById('connectBtn');
-        const startBtn = document.getElementById('startBtn');
-        const callBtn = document.getElementById('callBtn');
-        const hangupBtn = document.getElementById('hangupBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const viewBtn = document.getElementById('viewBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const cameraIdInput = document.getElementById('cameraIdInput');
         const statusDiv = document.getElementById('status');
         const logDiv = document.getElementById('log');
-        const localVideo = document.getElementById('localVideo');
-        const remoteVideo = document.getElementById('remoteVideo');
+        const camerasList = document.getElementById('camerasList');
+        const videoContainer = document.getElementById('videoContainer');
         
         // Variables
         let ws;
-        let localStream;
-        let remoteStreams = new Map(); // Store multiple remote streams
-        let peerConnections = new Map(); // Store multiple peer connections
         let clientId;
-        let peerIds = new Set(); // Store multiple peer IDs
+        let availableCameras = new Map();
+        let activeStreams = new Map();
+        let peerConnections = new Map();
         
         // Configuration
         const config = {
@@ -128,7 +186,9 @@
                 statusDiv.textContent = 'Connected to signaling server';
                 statusDiv.style.backgroundColor = '#d4edda';
                 connectBtn.disabled = true;
-                startBtn.disabled = false;
+                disconnectBtn.disabled = false;
+                viewBtn.disabled = false;
+                refreshBtn.disabled = false;
             };
             
             ws.onmessage = (event) => {
@@ -143,7 +203,6 @@
                         
                     case 'joined':
                         log(`Joined room: ${message.room}`);
-                        callBtn.disabled = false;
                         break;
                         
                     case 'offer':
@@ -159,28 +218,18 @@
                         break;
                         
                     case 'clientJoined':
-                        log(`Peer ${message.clientId} joined the room`);
-                        // Add peer to our list
-                        peerIds.add(message.clientId);
-                        // Auto-initiate connection to new peer
-                        if (localStream) {
-                            createPeerConnection(message.clientId);
-                            createOffer(message.clientId);
-                        }
+                        log(`Client ${message.clientId} joined the room (${message.deviceType})`);
                         break;
                         
-                    case 'clientDisconnected':
-                        log(`Peer ${message.clientId} disconnected`);
-                        // Remove peer from our list
-                        peerIds.delete(message.clientId);
-                        // Clean up connection
-                        if (peerConnections.has(message.clientId)) {
-                            peerConnections.get(message.clientId).close();
-                            peerConnections.delete(message.clientId);
-                        }
-                        if (remoteStreams.has(message.clientId)) {
-                            remoteStreams.delete(message.clientId);
-                        }
+                    case 'cameraAvailable':
+                        log(`Camera ${message.cameraId} is now available`);
+                        availableCameras.set(message.cameraId, message.clientId);
+                        updateCamerasList();
+                        break;
+                        
+                    case 'cameraNotFound':
+                        log(`Camera ${message.cameraId} not found`);
+                        alert(`Camera ${message.cameraId} is not currently available`);
                         break;
                         
                     default:
@@ -193,96 +242,113 @@
                 statusDiv.textContent = 'Disconnected from signaling server';
                 statusDiv.style.backgroundColor = '#f8d7da';
                 connectBtn.disabled = false;
-                startBtn.disabled = true;
-                callBtn.disabled = true;
-                hangupBtn.disabled = true;
+                disconnectBtn.disabled = true;
+                viewBtn.disabled = true;
+                refreshBtn.disabled = true;
+                
+                // Clear all active streams
+                activeStreams.forEach((stream, cameraId) => {
+                    stream.getTracks().forEach(track => track.stop());
+                });
+                activeStreams.clear();
+                
+                // Close all peer connections
+                peerConnections.forEach(pc => pc.close());
+                peerConnections.clear();
+                
+                // Clear UI
+                videoContainer.innerHTML = '';
             };
             
             ws.onerror = (error) => {
                 log(`WebSocket error: ${error}`);
             };
+            
+            // Join the CCTV room
+            setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'join',
+                        room: 'cctv'
+                    }));
+                }
+            }, 1000);
         };
         
-        // Start local video
-        startBtn.onclick = async () => {
-            try {
-                log('Requesting local video stream');
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: true, 
-                    audio: true 
-                });
-                
-                localVideo.srcObject = localStream;
-                log('Local video stream acquired');
-                
-                // Join default room
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    room: 'default'
-                }));
-                
-                startBtn.disabled = true;
-                hangupBtn.disabled = false;
-            } catch (error) {
-                log(`Error accessing media devices: ${error}`);
+        // Disconnect from server
+        disconnectBtn.onclick = () => {
+            if (ws) {
+                ws.close();
             }
         };
         
-        // Call all peers
-        callBtn.onclick = () => {
-            if (peerIds.size === 0) {
-                log('No peers available to call');
+        // View a specific camera
+        viewBtn.onclick = () => {
+            const cameraId = cameraIdInput.value.trim();
+            if (!cameraId) {
+                alert('Please enter a camera ID');
                 return;
             }
             
-            // Create connections to all peers
-            peerIds.forEach(peerId => {
-                if (!peerConnections.has(peerId)) {
-                    createPeerConnection(peerId);
-                    createOffer(peerId);
-                }
-            });
+            if (availableCameras.has(cameraId)) {
+                requestCameraStream(cameraId);
+            } else {
+                // Request stream anyway - server will check if camera exists
+                requestCameraStream(cameraId);
+            }
         };
         
-        // Hang up all connections
-        hangupBtn.onclick = () => {
-            // Close all peer connections
-            peerConnections.forEach((pc, peerId) => {
-                pc.close();
-            });
-            
-            peerConnections.clear();
-            remoteStreams.clear();
-            
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-                localStream = null;
-                localVideo.srcObject = null;
+        // Refresh camera list
+        refreshBtn.onclick = () => {
+            updateCamerasList();
+        };
+        
+        // Request camera stream
+        function requestCameraStream(cameraId) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server');
+                return;
             }
             
-            callBtn.disabled = false;
-            hangupBtn.disabled = true;
-            log('All calls ended');
-        };
+            log(`Requesting stream from camera ${cameraId}`);
+            ws.send(JSON.stringify({
+                type: 'requestStream',
+                cameraId: cameraId,
+                requestId: Date.now().toString()
+            }));
+        }
+        
+        // Update cameras list UI
+        function updateCamerasList() {
+            if (availableCameras.size === 0) {
+                camerasList.innerHTML = '<p>No cameras available. Connect cameras to the network.</p>';
+                return;
+            }
+            
+            let html = '<div>';
+            availableCameras.forEach((clientId, cameraId) => {
+                html += `
+                    <div class="camera-item">
+                        <span>Camera ID: ${cameraId}</span>
+                        <button onclick="requestCameraStream('${cameraId}')">View</button>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            camerasList.innerHTML = html;
+        }
         
         // Create peer connection
-        function createPeerConnection(peerId) {
+        function createPeerConnection(cameraId) {
             const peerConnection = new RTCPeerConnection(config);
-            
-            // Add local stream tracks
-            if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
-                });
-            }
             
             // Handle ICE candidates
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    log(`Sending ICE candidate to peer ${peerId}`);
+                    log(`Sending ICE candidate to camera ${cameraId}`);
                     ws.send(JSON.stringify({
                         type: 'iceCandidate',
-                        target: peerId,
+                        target: cameraId,
                         candidate: event.candidate
                     }));
                 }
@@ -290,122 +356,156 @@
             
             // Handle remote stream
             peerConnection.ontrack = (event) => {
-                log(`Received remote stream from peer ${peerId}`);
-                if (!remoteStreams.has(peerId)) {
-                    remoteStreams.set(peerId, event.streams[0]);
-                    // In a real app, you would display this stream in a video element
-                }
-                remoteVideo.srcObject = event.streams[0];
+                log(`Received video stream from camera ${cameraId}`);
+                const stream = event.streams[0];
+                activeStreams.set(cameraId, stream);
+                displayVideoStream(cameraId, stream);
             };
             
             // Handle connection state changes
             peerConnection.onconnectionstatechange = () => {
-                log(`Connection state with peer ${peerId}: ${peerConnection.connectionState}`);
+                log(`Connection state with camera ${cameraId}: ${peerConnection.connectionState}`);
+                if (peerConnection.connectionState === 'disconnected' || 
+                    peerConnection.connectionState === 'failed') {
+                    peerConnections.delete(cameraId);
+                    if (activeStreams.has(cameraId)) {
+                        activeStreams.delete(cameraId);
+                    }
+                }
             };
             
             peerConnection.onsignalingstatechange = () => {
-                log(`Signaling state with peer ${peerId}: ${peerConnection.signalingState}`);
+                log(`Signaling state with camera ${cameraId}: ${peerConnection.signalingState}`);
             };
             
             peerConnection.oniceconnectionstatechange = () => {
-                log(`ICE connection state with peer ${peerId}: ${peerConnection.iceConnectionState}`);
+                log(`ICE connection state with camera ${cameraId}: ${peerConnection.iceConnectionState}`);
             };
             
             // Store the peer connection
-            peerConnections.set(peerId, peerConnection);
+            peerConnections.set(cameraId, peerConnection);
             return peerConnection;
         }
         
+        // Display video stream in UI
+        function displayVideoStream(cameraId, stream) {
+            // Check if video element already exists
+            let videoContainerEl = document.getElementById(`video-${cameraId}`);
+            if (!videoContainerEl) {
+                videoContainerEl = document.createElement('div');
+                videoContainerEl.id = `video-${cameraId}`;
+                videoContainerEl.className = 'video-item';
+                videoContainerEl.innerHTML = `
+                    <h3>Camera ${cameraId}</h3>
+                    <video id="video-${cameraId}-player" autoplay></video>
+                    <button class="danger" onclick="stopCameraStream('${cameraId}')" style="margin-top: 10px;">Stop Viewing</button>
+                `;
+                videoContainer.appendChild(videoContainerEl);
+            }
+            
+            const videoElement = document.getElementById(`video-${cameraId}-player`);
+            videoElement.srcObject = stream;
+        }
+        
+        // Stop viewing a camera
+        function stopCameraStream(cameraId) {
+            // Close peer connection
+            if (peerConnections.has(cameraId)) {
+                peerConnections.get(cameraId).close();
+                peerConnections.delete(cameraId);
+            }
+            
+            // Stop stream tracks
+            if (activeStreams.has(cameraId)) {
+                activeStreams.get(cameraId).getTracks().forEach(track => track.stop());
+                activeStreams.delete(cameraId);
+            }
+            
+            // Remove video element
+            const videoContainerEl = document.getElementById(`video-${cameraId}`);
+            if (videoContainerEl) {
+                videoContainerEl.remove();
+            }
+            
+            log(`Stopped viewing camera ${cameraId}`);
+        }
+        
         // Create offer
-        async function createOffer(peerId) {
+        async function createOffer(cameraId) {
             try {
-                const peerConnection = peerConnections.get(peerId);
+                const peerConnection = peerConnections.get(cameraId);
                 if (!peerConnection) {
-                    log(`No peer connection found for peer ${peerId}`);
+                    log(`No peer connection found for camera ${cameraId}`);
                     return;
                 }
                 
-                log(`Creating offer for peer ${peerId}`);
-                const offer = await peerConnection.createOffer();
+                log(`Creating offer for camera ${cameraId}`);
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveVideo: true, // Viewer wants to receive video
+                    offerToReceiveAudio: false
+                });
+                
                 await peerConnection.setLocalDescription(offer);
                 
-                log(`Sending offer to peer ${peerId}`);
+                log(`Sending offer to camera ${cameraId}`);
                 ws.send(JSON.stringify({
                     type: 'offer',
-                    target: peerId,
+                    target: cameraId,
                     sdp: offer
                 }));
             } catch (error) {
-                log(`Error creating offer for peer ${peerId}: ${error}`);
+                log(`Error creating offer for camera ${cameraId}: ${error}`);
             }
         }
         
-        // Handle offer
+        // Handle offer from camera
         async function handleOffer(message) {
             try {
-                log(`Received offer from peer ${message.sender}`);
+                log(`Received offer from camera ${message.sender}`);
                 
-                // Add sender to our peer list if not already there
-                if (!peerIds.has(message.sender)) {
-                    peerIds.add(message.sender);
-                }
-                
-                // Create peer connection if it doesn't exist
-                let peerConnection;
-                if (peerConnections.has(message.sender)) {
-                    peerConnection = peerConnections.get(message.sender);
-                } else {
-                    peerConnection = createPeerConnection(message.sender);
-                }
-                
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
-                
-                log(`Creating answer for peer ${message.sender}`);
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                
-                log(`Sending answer to peer ${message.sender}`);
-                ws.send(JSON.stringify({
-                    type: 'answer',
-                    target: message.sender,
-                    sdp: answer
-                }));
+                // In this architecture, cameras don't send offers to viewers
+                // Viewers request streams from cameras
+                log('Unexpected offer received from camera');
             } catch (error) {
-                log(`Error handling offer from peer ${message.sender}: ${error}`);
+                log(`Error handling offer from camera ${message.sender}: ${error}`);
             }
         }
         
-        // Handle answer
+        // Handle answer from camera
         async function handleAnswer(message) {
             try {
-                log(`Received answer from peer ${message.sender}`);
+                log(`Received answer from camera ${message.sender}`);
                 const peerConnection = peerConnections.get(message.sender);
                 if (!peerConnection) {
-                    log(`No peer connection found for peer ${message.sender}`);
+                    log(`No peer connection found for camera ${message.sender}`);
                     return;
                 }
                 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp));
             } catch (error) {
-                log(`Error handling answer from peer ${message.sender}: ${error}`);
+                log(`Error handling answer from camera ${message.sender}: ${error}`);
             }
         }
         
-        // Handle ICE candidate
+        // Handle ICE candidate from camera
         async function handleIceCandidate(message) {
             try {
-                log(`Received ICE candidate from peer ${message.sender}`);
+                log(`Received ICE candidate from camera ${message.sender}`);
                 const peerConnection = peerConnections.get(message.sender);
                 if (!peerConnection) {
-                    log(`No peer connection found for peer ${message.sender}`);
+                    log(`No peer connection found for camera ${message.sender}`);
                     return;
                 }
                 
                 await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
             } catch (error) {
-                log(`Error handling ICE candidate from peer ${message.sender}: ${error}`);
+                log(`Error handling ICE candidate from camera ${message.sender}: ${error}`);
             }
         }
+        
+        // Make functions available globally for inline event handlers
+        window.requestCameraStream = requestCameraStream;
+        window.stopCameraStream = stopCameraStream;
     </script>
 </body>
 </html>

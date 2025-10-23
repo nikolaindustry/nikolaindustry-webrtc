@@ -19,7 +19,9 @@
     "signaling",
     "websocket",
     "video",
-    "streaming"
+    "streaming",
+    "cctv",
+    "iot"
   ],
   "author": "Your Name",
   "license": "MIT"

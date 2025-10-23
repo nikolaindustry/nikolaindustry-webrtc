@@ -130,6 +130,16 @@ function handleSignalingMessage(sender, message) {
       const room = message.room || 'default';
       sender.room = room;
       
+      // Check if client specified a device type
+      if (message.deviceType) {
+        sender.deviceType = message.deviceType; // 'camera' or 'viewer'
+      }
+      
+      // Check if camera specified a camera ID
+      if (message.cameraId) {
+        sender.cameraId = message.cameraId;
+      }
+      
       // Notify client of room join success
       sender.send(JSON.stringify({
         type: 'joined',
@@ -139,8 +149,52 @@ function handleSignalingMessage(sender, message) {
       // Notify other clients in the room about the new client
       broadcastToRoom(room, {
         type: 'clientJoined',
-        clientId: sender.clientId
+        clientId: sender.clientId,
+        deviceType: sender.deviceType || 'viewer',
+        cameraId: sender.cameraId
       }, sender);
+      
+      // If this is a camera, notify all viewers in the room about available cameras
+      if (sender.deviceType === 'camera' && sender.cameraId) {
+        broadcastToRoom(room, {
+          type: 'cameraAvailable',
+          cameraId: sender.cameraId,
+          clientId: sender.clientId
+        }, sender);
+      }
+      break;
+      
+    case 'requestStream':
+      // Viewer requesting to view a specific camera
+      if (!message.cameraId) {
+        console.log('Request stream message missing camera ID');
+        return;
+      }
+      
+      // Find the camera with the requested ID
+      let targetCamera = null;
+      clients.forEach((client, clientId) => {
+        if (client.room === sender.room && 
+            client.deviceType === 'camera' && 
+            client.cameraId === message.cameraId) {
+          targetCamera = clientId;
+        }
+      });
+      
+      if (targetCamera) {
+        // Notify the camera that a viewer wants to connect
+        sendToClient(targetCamera, {
+          type: 'viewerRequest',
+          viewerId: sender.clientId,
+          requestId: message.requestId || Date.now().toString()
+        });
+      } else {
+        // Notify viewer that camera is not available
+        sender.send(JSON.stringify({
+          type: 'cameraNotFound',
+          cameraId: message.cameraId
+        }));
+      }
       break;
       
     default:

@@ -2,9 +2,10 @@
   "name": "webrtc-iot-client",
   "version": "1.0.0",
   "description": "WebRTC client for IoT devices",
-  "main": "camera_device.js",
+  "main": "esp32_camera.js",
   "scripts": {
-    "start": "node camera_device.js"
+    "start": "node esp32_camera.js",
+    "start:camera": "node esp32_camera.js"
   },
   "dependencies": {
     "ws": "^8.13.0",
@@ -13,7 +14,9 @@
   "keywords": [
     "webrtc",
     "iot",
+    "esp32",
     "camera",
+    "cctv",
     "streaming"
   ],
   "author": "Your Name",
