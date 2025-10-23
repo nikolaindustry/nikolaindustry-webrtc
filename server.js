@@ -1,12 +1,11 @@
 const express = require('express');
 const http = require('http');
-const https = require('https');
-const fs = require('fs');
 const WebSocket = require('ws');
 const path = require('path');
 
-// Create Express app
+// Create Express app and HTTP server
 const app = express();
+const server = http.createServer(app);
 
 // Serve static files from public directory
 app.use(express.static('public'));
@@ -20,23 +19,6 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
-// Check if HTTPS certificates exist
-let server;
-const httpsOptions = {
-  key: fs.existsSync('./key.pem') ? fs.readFileSync('./key.pem') : null,
-  cert: fs.existsSync('./cert.pem') ? fs.readFileSync('./cert.pem') : null
-};
-
-if (httpsOptions.key && httpsOptions.cert) {
-  // Create HTTPS server if certificates are available
-  server = https.createServer(httpsOptions, app);
-  console.log('Starting server with HTTPS support');
-} else {
-  // Fallback to HTTP server
-  server = http.createServer(app);
-  console.log('Starting server with HTTP (for production HTTPS should be used for media access)');
-}
 
 // Create WebSocket server
 const wss = new WebSocket.Server({ server });
@@ -199,28 +181,6 @@ function generateClientId() {
 // Start server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
-  const networkInterfaces = require('os').networkInterfaces();
-  const addresses = [];
-  
-  Object.keys(networkInterfaces).forEach(interface => {
-    networkInterfaces[interface].forEach(addr => {
-      if (!addr.internal && addr.family === 'IPv4') {
-        addresses.push(addr.address);
-      }
-    });
-  });
-  
   console.log(`Server is listening on port ${PORT}`);
-  console.log(`Local: http://localhost:${PORT}`);
-  if (addresses.length > 0) {
-    console.log(`Network: http://${addresses[0]}:${PORT}`);
-  }
-  
-  // If using HTTPS, also show HTTPS URLs
-  if (httpsOptions.key && httpsOptions.cert) {
-    console.log(`Secure Local: https://localhost:${PORT}`);
-    if (addresses.length > 0) {
-      console.log(`Secure Network: https://${addresses[0]}:${PORT}`);
-    }
-  }
+  console.log(`Access the application at: http://localhost:${PORT}`);
 });
