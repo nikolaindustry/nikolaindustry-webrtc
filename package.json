@@ -1,11 +1,13 @@
 {
   "name": "webrtc-signaling-server",
-  "version": "1.0.0",
-  "description": "A WebRTC signaling server for facilitating peer-to-peer video streaming",
+  "version": "1.1.0",
+  "description": "A WebRTC signaling server for facilitating peer-to-peer video streaming with CCTV capabilities",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "camera-example": "node examples/camera-example.js",
+    "viewer-example": "node examples/viewer-example.js"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -21,8 +23,19 @@
     "video",
     "streaming",
     "cctv",
-    "iot"
+    "iot",
+    "camera",
+    "viewer"
   ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "directories": {
+    "example": "examples"
+  },
+  "files": [
+    "lib/",
+    "examples/",
+    "public/",
+    "server.js"
+  ]
 }

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC CCTV API Browser Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            background-color: #000;
+            border-radius: 4px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebRTC CCTV API Browser Example</h1>
+    
+    <!-- Camera Section -->
+    <div class="container">
+        <h2>Camera Client</h2>
+        <div>
+            <label>Server URL:</label>
+            <input type="text" id="cameraServerUrl" value="ws://localhost:8080" placeholder="WebSocket server URL">
+        </div>
+        <div>
+            <label>Camera ID:</label>
+            <input type="text" id="cameraId" value="browser-camera-001" placeholder="Unique camera ID">
+        </div>
+        <div>
+            <label>Room Name:</label>
+            <input type="text" id="cameraRoom" value="cctv" placeholder="Room name">
+        </div>
+        <div>
+            <button id="connectCamera">Connect Camera</button>
+            <button id="disconnectCamera" disabled>Disconnect Camera</button>
+            <button id="startStreaming" disabled>Start Streaming</button>
+            <button id="stopStreaming" disabled>Stop Streaming</button>
+        </div>
+        <div id="cameraStatus" class="status disconnected">Camera Disconnected</div>
+        <video id="localVideo" autoplay muted playsinline></video>
+    </div>
+    
+    <!-- Viewer Section -->
+    <div class="container">
+        <h2>Viewer Client</h2>
+        <div>
+            <label>Server URL:</label>
+            <input type="text" id="viewerServerUrl" value="ws://localhost:8080" placeholder="WebSocket server URL">
+        </div>
+        <div>
+            <label>Room Name:</label>
+            <input type="text" id="viewerRoom" value="cctv" placeholder="Room name">
+        </div>
+        <div>
+            <label>Camera ID to View:</label>
+            <input type="text" id="viewCameraId" value="browser-camera-001" placeholder="Camera ID to view">
+        </div>
+        <div>
+            <button id="connectViewer">Connect Viewer</button>
+            <button id="disconnectViewer" disabled>Disconnect Viewer</button>
+            <button id="requestStream" disabled>Request Stream</button>
+            <button id="stopViewing" disabled>Stop Viewing</button>
+        </div>
+        <div id="viewerStatus" class="status disconnected">Viewer Disconnected</div>
+        <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+    
+    <!-- Log Section -->
+    <div class="container">
+        <h2>Event Log</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Include the WebRTC CCTV API -->
+    <script src="../lib/webrtc-cctv-api.js"></script>
+    
+    <script>
+        // DOM Elements
+        const cameraServerUrl = document.getElementById('cameraServerUrl');
+        const cameraId = document.getElementById('cameraId');
+        const cameraRoom = document.getElementById('cameraRoom');
+        const connectCameraBtn = document.getElementById('connectCamera');
+        const disconnectCameraBtn = document.getElementById('disconnectCamera');
+        const startStreamingBtn = document.getElementById('startStreaming');
+        const stopStreamingBtn = document.getElementById('stopStreaming');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const localVideo = document.getElementById('localVideo');
+        
+        const viewerServerUrl = document.getElementById('viewerServerUrl');
+        const viewerRoom = document.getElementById('viewerRoom');
+        const viewCameraId = document.getElementById('viewCameraId');
+        const connectViewerBtn = document.getElementById('connectViewer');
+        const disconnectViewerBtn = document.getElementById('disconnectViewer');
+        const requestStreamBtn = document.getElementById('requestStream');
+        const stopViewingBtn = document.getElementById('stopViewing');
+        const viewerStatus = document.getElementById('viewerStatus');
+        const remoteVideo = document.getElementById('remoteVideo');
+        
+        const logElement = document.getElementById('log');
+        
+        // Camera and Viewer instances
+        let camera = null;
+        let viewer = null;
+        
+        // Log function
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logElement.appendChild(logEntry);
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        // Camera Functions
+        async function connectCamera() {
+            try {
+                camera = new WebRTCCCTVAPI.CameraClient({
+                    serverUrl: cameraServerUrl.value,
+                    cameraId: cameraId.value,
+                    room: cameraRoom.value,
+                    mediaConstraints: { 
+                        video: { width: 1280, height: 720 },
+                        audio: false 
+                    }
+                });
+                
+                // Set up camera event listeners
+                camera.on('connected', () => {
+                    log('Camera connected to server');
+                    cameraStatus.textContent = 'Camera Connected';
+                    cameraStatus.className = 'status connected';
+                    connectCameraBtn.disabled = true;
+                    disconnectCameraBtn.disabled = false;
+                    startStreamingBtn.disabled = false;
+                });
+                
+                camera.on('registered', (data) => {
+                    log(`Camera registered in room: ${data.room} with ID: ${data.cameraId}`);
+                });
+                
+                camera.on('streamingStarted', () => {
+                    log('Camera streaming started');
+                    startStreamingBtn.disabled = true;
+                    stopStreamingBtn.disabled = false;
+                });
+                
+                camera.on('streamingStopped', () => {
+                    log('Camera streaming stopped');
+                    startStreamingBtn.disabled = false;
+                    stopStreamingBtn.disabled = true;
+                });
+                
+                camera.on('viewerRequest', (message) => {
+                    log(`Viewer ${message.viewerId} requested stream`);
+                });
+                
+                camera.on('error', (error) => {
+                    log(`Camera error: ${error.message}`);
+                });
+                
+                camera.on('disconnected', () => {
+                    log('Camera disconnected from server');
+                    cameraStatus.textContent = 'Camera Disconnected';
+                    cameraStatus.className = 'status disconnected';
+                    connectCameraBtn.disabled = false;
+                    disconnectCameraBtn.disabled = true;
+                    startStreamingBtn.disabled = true;
+                    stopStreamingBtn.disabled = true;
+                });
+                
+                // Connect and register camera
+                log('Connecting camera...');
+                await camera.register();
+                log('Camera connected and registered');
+                
+                // Display local stream
+                if (camera.localStream) {
+                    localVideo.srcObject = camera.localStream;
+                }
+            } catch (error) {
+                log(`Failed to connect camera: ${error.message}`);
+            }
+        }
+        
+        async function disconnectCamera() {
+            if (camera) {
+                await camera.close();
+                localVideo.srcObject = null;
+                camera = null;
+            }
+        }
+        
+        async function startStreaming() {
+            if (camera) {
+                await camera.startStreaming();
+            }
+        }
+        
+        async function stopStreaming() {
+            if (camera) {
+                await camera.stopStreaming();
+            }
+        }
+        
+        // Viewer Functions
+        async function connectViewer() {
+            try {
+                viewer = new WebRTCCCTVAPI.ViewerClient({
+                    serverUrl: viewerServerUrl.value,
+                    room: viewerRoom.value
+                });
+                
+                // Set up viewer event listeners
+                viewer.on('connected', () => {
+                    log('Viewer connected to server');
+                    viewerStatus.textContent = 'Viewer Connected';
+                    viewerStatus.className = 'status connected';
+                    connectViewerBtn.disabled = true;
+                    disconnectViewerBtn.disabled = false;
+                    requestStreamBtn.disabled = false;
+                });
+                
+                viewer.on('roomJoined', (room) => {
+                    log(`Viewer joined room: ${room}`);
+                });
+                
+                viewer.on('cameraAvailable', (message) => {
+                    log(`Camera available: ${message.cameraId}`);
+                });
+                
+                viewer.on('streamReceived', (stream, cameraId) => {
+                    log(`Stream received from camera: ${cameraId}`);
+                    remoteVideo.srcObject = stream;
+                    stopViewingBtn.disabled = false;
+                });
+                
+                viewer.on('cameraNotFound', (message) => {
+                    log(`Camera not found: ${message.cameraId}`);
+                });
+                
+                viewer.on('error', (error) => {
+                    log(`Viewer error: ${error.message}`);
+                });
+                
+                viewer.on('disconnected', () => {
+                    log('Viewer disconnected from server');
+                    viewerStatus.textContent = 'Viewer Disconnected';
+                    viewerStatus.className = 'status disconnected';
+                    connectViewerBtn.disabled = false;
+                    disconnectViewerBtn.disabled = true;
+                    requestStreamBtn.disabled = true;
+                    stopViewingBtn.disabled = true;
+                });
+                
+                // Connect and join room
+                log('Connecting viewer...');
+                await viewer.connect();
+                await viewer.joinRoom(viewerRoom.value);
+                log('Viewer connected and joined room');
+            } catch (error) {
+                log(`Failed to connect viewer: ${error.message}`);
+            }
+        }
+        
+        async function disconnectViewer() {
+            if (viewer) {
+                remoteVideo.srcObject = null;
+                await viewer.close();
+                viewer = null;
+            }
+        }
+        
+        async function requestStream() {
+            if (viewer) {
+                try {
+                    log(`Requesting stream from camera: ${viewCameraId.value}`);
+                    await viewer.requestStream(viewCameraId.value);
+                    log('Stream request sent');
+                } catch (error) {
+                    log(`Failed to request stream: ${error.message}`);
+                }
+            }
+        }
+        
+        async function stopViewing() {
+            if (viewer) {
+                await viewer.stopViewing(viewCameraId.value);
+                remoteVideo.srcObject = null;
+                stopViewingBtn.disabled = true;
+                log('Stopped viewing stream');
+            }
+        }
+        
+        // Event Listeners
+        connectCameraBtn.addEventListener('click', connectCamera);
+        disconnectCameraBtn.addEventListener('click', disconnectCamera);
+        startStreamingBtn.addEventListener('click', startStreaming);
+        stopStreamingBtn.addEventListener('click', stopStreaming);
+        
+        connectViewerBtn.addEventListener('click', connectViewer);
+        disconnectViewerBtn.addEventListener('click', disconnectViewer);
+        requestStreamBtn.addEventListener('click', requestStream);
+        stopViewingBtn.addEventListener('click', stopViewing);
+        
+        // Log initial message
+        log('WebRTC CCTV API Browser Example Loaded');
+        log('Make sure the signaling server is running at the specified URL');
+    </script>
+</body>
+</html>

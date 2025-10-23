@@ -5,11 +5,12 @@
   "main": "esp32_camera.js",
   "scripts": {
     "start": "node esp32_camera.js",
-    "start:camera": "node esp32_camera.js"
+    "start:camera": "node esp32_camera.js",
+    "start:api": "node esp32_camera_api.js",
+    "test:viewer": "node viewer_test.js"
   },
   "dependencies": {
-    "ws": "^8.13.0",
-    "wrtc": "^0.4.7"
+    "ws": "^8.13.0"
   },
   "keywords": [
     "webrtc",

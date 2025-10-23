@@ -9,6 +9,9 @@ A lightweight WebRTC signaling server built with Node.js and WebSocket to facili
 - Exchange of SDP offers/answers for connection negotiation
 - ICE candidate exchange for NAT traversal
 - Simple web interface for testing
+- Programmatic API for code-based integration
+- Cross-platform compatibility (Windows, Linux, macOS, embedded systems)
+- ESP32 camera module support
 
 ## Prerequisites
 
@@ -45,6 +48,32 @@ npm start
 ```
 
 The server will start on port 8080 by default, or the PORT environment variable if set.
+
+### Programmatic API
+
+This server includes a programmatic API for code-based integration. See [API Documentation](API.md) for details.
+
+Examples:
+```bash
+# Camera example
+npm run camera-example
+
+# Viewer example
+npm run viewer-example
+```
+
+### ESP32 Camera Integration
+
+For ESP32 camera module integration, see [ESP32 Integration Guide](ESP32_GUIDE.md).
+
+IoT examples:
+```bash
+# ESP32 camera using direct client
+cd iot && node esp32_camera.js
+
+# ESP32 camera using programmatic API
+cd iot && node esp32_camera_api.js
+```
 
 ## API Endpoints
 
@@ -91,6 +120,14 @@ The server will start on port 8080 by default, or the PORT environment variable 
    }
    ```
 
+5. `requestStream` - Request stream from a specific camera
+   ```json
+   {
+     "type": "requestStream",
+     "cameraId": "camera-identifier"
+   }
+   ```
+
 ### Server to Client
 
 1. `welcome` - Sent when client connects
@@ -113,7 +150,9 @@ The server will start on port 8080 by default, or the PORT environment variable 
    ```json
    {
      "type": "clientJoined",
-     "clientId": "joining-client-id"
+     "clientId": "joining-client-id",
+     "deviceType": "camera|viewer",
+     "cameraId": "camera-identifier" // For cameras
    }
    ```
 
@@ -152,6 +191,40 @@ The server will start on port 8080 by default, or the PORT environment variable 
    }
    ```
 
+8. `viewerRequest` - Notification to a camera that a viewer wants to connect
+   ```json
+   {
+     "type": "viewerRequest",
+     "viewerId": "viewer-client-id"
+   }
+   ```
+
+9. `cameraAvailable` - Notification that a camera is available in the room
+   ```json
+   {
+     "type": "cameraAvailable",
+     "cameraId": "camera-identifier",
+     "clientId": "camera-client-id"
+   }
+   ```
+
+10. `cameraUnavailable` - Notification that a camera is no longer available
+    ```json
+    {
+      "type": "cameraUnavailable",
+      "cameraId": "camera-identifier",
+      "clientId": "camera-client-id"
+    }
+    ```
+
+11. `cameraNotFound` - Notification that a requested camera was not found
+    ```json
+    {
+      "type": "cameraNotFound",
+      "cameraId": "camera-identifier"
+    }
+    ```
+
 ## Deployment on Render.com
 
 This server is configured for deployment on Render.com using the provided `render.yaml` file. Simply connect your GitHub repository to Render and it will automatically deploy the service.
@@ -163,15 +236,49 @@ Environment variables:
 
 Open your browser to `http://localhost:8080` (or your deployed URL) to access the test interface. You'll need to open two browser windows or tabs to test the peer-to-peer connection.
 
+For programmatic API testing, see the examples in the `examples/` directory:
+- `examples/camera-example.js` - Camera client example
+- `examples/viewer-example.js` - Viewer client example
+- `examples/browser-example.html` - Browser-based example
+
+For ESP32 camera integration, see the examples in the `iot/` directory:
+- `iot/esp32_camera.js` - Direct ESP32 camera client implementation
+- `iot/esp32_camera_api.js` - ESP32 camera using programmatic API
+
 ## How It Works
 
 1. Clients connect to the WebSocket server and are assigned unique IDs
 2. Clients join rooms to find peers
-3. When a client wants to connect to a peer:
-   - They create an SDP offer and send it to the target client via the signaling server
-   - The target client responds with an SDP answer
+3. Cameras register with unique identifiers
+4. Viewers request streams from specific cameras by ID
+5. When a viewer requests a stream:
+   - The server notifies the camera of the viewer request
+   - The camera creates an SDP offer and sends it to the viewer via the signaling server
+   - The viewer responds with an SDP answer
    - Both clients exchange ICE candidates to establish the peer-to-peer connection
-4. Once the signaling process is complete, the video streams flow directly between peers
+6. Once the signaling process is complete, the video streams flow directly between peers
+
+## Programmatic API
+
+This server includes a comprehensive programmatic API for code-based integration with cross-platform compatibility:
+
+- **CameraClient**: For creating camera clients that can register and stream
+- **ViewerClient**: For creating viewer clients that can request and receive streams
+- **WebRTCCCTVClient**: Base class with common functionality
+- Cross-platform support for Windows, Linux, macOS, and embedded systems
+- Browser and Node.js compatibility
+
+See [API Documentation](API.md) for detailed usage instructions.
+
+## ESP32 Integration
+
+The system supports ESP32 camera modules through two approaches:
+
+1. **Node.js Bridge Approach**: Uses a companion device (Raspberry Pi, etc.) that communicates with the ESP32 camera module and handles WebRTC signaling using the programmatic API.
+
+2. **Native ESP32 Approach**: Implements WebRTC directly on the ESP32 (more complex, limited by hardware constraints).
+
+See [ESP32 Integration Guide](ESP32_GUIDE.md) for detailed implementation instructions.
 
 ## Security Considerations
 
