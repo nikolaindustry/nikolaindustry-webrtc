@@ -527,6 +527,11 @@
                     </div>
                 </div>
             </div>
+            <div class="btn-group" style="margin-top: 1rem;">
+                <button id="micToggleButton" class="btn btn-secondary">
+                    <i class="fas fa-microphone"></i> Mute Audio
+                </button>
+            </div>
         </div>
 
         <div class="controls-grid">
@@ -581,6 +586,7 @@
         const disconnectBtn = document.getElementById('disconnectBtn');
         const viewBtn = document.getElementById('viewBtn');
         const refreshBtn = document.getElementById('refreshBtn');
+        const micToggleButton = document.getElementById('micToggleButton'); // Add mic toggle button
         const cameraIdInput = document.getElementById('cameraIdInput');
         const roomNameInput = document.getElementById('roomNameInput');
         const createRoomBtn = document.getElementById('createRoomBtn');
@@ -601,6 +607,7 @@
         let availableCameras = new Map();
         let activeStreams = new Map();
         let peerConnections = new Map();
+        let isAudioMuted = false; // Add audio muted state
         
         // Configuration
         const config = {
@@ -664,6 +671,7 @@
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
                 createRoomBtn.disabled = false;
+                micToggleButton.disabled = false; // Enable mic toggle button
             };
             
             ws.onmessage = (event) => {
@@ -1149,6 +1157,34 @@
                 log(`Error handling ICE candidate from camera ${message.sender}: ${error}`);
             }
         }
+        
+        // Toggle microphone/audio
+        micToggleButton.onclick = () => {
+            isAudioMuted = !isAudioMuted;
+            
+            if (isAudioMuted) {
+                micToggleButton.innerHTML = '<i class="fas fa-microphone-slash"></i> Unmute Audio';
+                micToggleButton.classList.remove('btn-secondary');
+                micToggleButton.classList.add('btn-warning');
+                log('Audio muted');
+            } else {
+                micToggleButton.innerHTML = '<i class="fas fa-microphone"></i> Mute Audio';
+                micToggleButton.classList.remove('btn-warning');
+                micToggleButton.classList.add('btn-secondary');
+                log('Audio unmuted');
+            }
+            
+            // Update audio state for all existing peer connections
+            activeStreams.forEach((stream, cameraId) => {
+                const videoElement = document.getElementById(`video-${cameraId}`);
+                if (videoElement && videoElement.srcObject) {
+                    const audioTracks = videoElement.srcObject.getAudioTracks();
+                    audioTracks.forEach(track => {
+                        track.enabled = !isAudioMuted;
+                    });
+                }
+            });
+        };
         
         // Make functions available globally for inline event handlers
         window.requestCameraStream = requestCameraStream;

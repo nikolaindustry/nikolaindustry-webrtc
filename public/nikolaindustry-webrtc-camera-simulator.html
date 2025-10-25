@@ -468,6 +468,9 @@
                 <button id="stopStreamBtn" class="btn btn-danger" disabled>
                     <i class="fas fa-stop"></i> Stop Streaming
                 </button>
+                <button id="micToggleBtn" class="btn btn-secondary" disabled>
+                    <i class="fas fa-microphone"></i> Mute Mic
+                </button>
             </div>
         </div>
 
@@ -523,6 +526,7 @@
         const disconnectBtn = document.getElementById('disconnectBtn');
         const startStreamBtn = document.getElementById('startStreamBtn');
         const stopStreamBtn = document.getElementById('stopStreamBtn');
+        const micToggleBtn = document.getElementById('micToggleBtn'); // Add mic toggle button
         const cameraIdInput = document.getElementById('cameraIdInput');
         const roomNameInput = document.getElementById('roomNameInput');
         const joinRoomBtn = document.getElementById('joinRoomBtn');
@@ -543,6 +547,7 @@
         let peerConnections = new Map();
         let viewerCount = 0;
         let isStreaming = false;
+        let isMicMuted = false; // Add mic muted state
         let currentRoom = null;
         
         // Configuration
@@ -603,17 +608,17 @@
             }
             
             try {
-                // Get local media stream
+                // Get local media stream with both video and audio
                 localStream = await navigator.mediaDevices.getUserMedia({ 
                     video: true, 
-                    audio: false 
+                    audio: true 
                 });
                 localVideo.srcObject = localStream;
                 videoPlaceholder.style.display = 'none';
-                log('Local video stream acquired');
+                log('Local video and audio stream acquired');
             } catch (error) {
                 log(`Error accessing media devices: ${error}`);
-                alert('Could not access camera. Please ensure you have a camera connected and have granted permission.');
+                alert('Could not access camera/microphone. Please ensure you have a camera and microphone connected and have granted permission.');
                 return;
             }
             
@@ -777,21 +782,27 @@
             leaveRoomBtn.disabled = true;
         };
         
-        // Start streaming (manual mode)
+        // Start streaming
         startStreamBtn.onclick = () => {
             isStreaming = true;
             updateStatusIndicators();
             startStreamBtn.disabled = true;
             stopStreamBtn.disabled = false;
+            micToggleBtn.disabled = false; // Enable mic toggle button
             log('Manual streaming started');
         };
         
         // Stop streaming
         stopStreamBtn.onclick = () => {
             isStreaming = false;
+            isMicMuted = false; // Reset mic state
+            micToggleBtn.innerHTML = '<i class="fas fa-microphone"></i> Mute Mic'; // Reset button text
+            micToggleBtn.classList.remove('btn-warning');
+            micToggleBtn.classList.add('btn-secondary');
             updateStatusIndicators();
             startStreamBtn.disabled = false;
             stopStreamBtn.disabled = true;
+            micToggleBtn.disabled = true; // Disable mic toggle button
             
             // Close all peer connections
             peerConnections.forEach(pc => pc.close());
@@ -800,6 +811,47 @@
             viewerCountSpan.textContent = viewerCount;
             
             log('Streaming stopped');
+        };
+        
+        // Toggle microphone
+        micToggleBtn.onclick = () => {
+            if (!localStream) {
+                log('No media stream available');
+                return;
+            }
+            
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                log('No audio track available');
+                return;
+            }
+            
+            const audioTrack = audioTracks[0];
+            isMicMuted = !isMicMuted;
+            
+            if (isMicMuted) {
+                audioTrack.enabled = false;
+                micToggleBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Unmute Mic';
+                micToggleBtn.classList.remove('btn-secondary');
+                micToggleBtn.classList.add('btn-warning');
+                log('Microphone muted');
+            } else {
+                audioTrack.enabled = true;
+                micToggleBtn.innerHTML = '<i class="fas fa-microphone"></i> Mute Mic';
+                micToggleBtn.classList.remove('btn-warning');
+                micToggleBtn.classList.add('btn-secondary');
+                log('Microphone unmuted');
+            }
+            
+            // Update audio state for all existing peer connections
+            peerConnections.forEach((pc, viewerId) => {
+                const senders = pc.getSenders();
+                senders.forEach(sender => {
+                    if (sender.track && sender.track.kind === 'audio') {
+                        sender.track.enabled = !isMicMuted;
+                    }
+                });
+            });
         };
         
         // Handle viewer request for stream
@@ -822,9 +874,13 @@
         function createPeerConnection(viewerId) {
             const peerConnection = new RTCPeerConnection(config);
             
-            // Add media tracks (video only for CCTV)
+            // Add media tracks (video and audio)
             if (localStream) {
                 localStream.getTracks().forEach(track => {
+                    // If mic is muted, disable audio tracks
+                    if (track.kind === 'audio' && isMicMuted) {
+                        track.enabled = false;
+                    }
                     peerConnection.addTrack(track, localStream);
                 });
             }
